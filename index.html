@@ -3,423 +3,360 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>當天車號 - 語音智慧提示系統</title>
+    <title>文湖線車務段 - 列車進站倒數看板</title>
     <style>
+        /* 頁面基本樣式：高對比、適合站台或辦公室觀看 */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
             margin: 0;
             padding: 20px;
             display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            align-items: flex-start;
             min-height: 100vh;
             box-sizing: border-box;
         }
+
         .container {
-            background-color: #fff;
-            padding: 25px;
+            background-color: #2d2d2d;
             border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            max-width: 1000px;
+            padding: 30px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             width: 100%;
+            max-width: 500px;
+            text-align: center;
         }
-        h2 {
-            color: #2c3e50;
+
+        h1 {
             margin-top: 0;
-            border-bottom: 3px solid #009688;
-            padding-bottom: 12px;
-            font-size: 1.6rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            color: #ffd700;
+            font-size: 24px;
+            letter-spacing: 1px;
         }
-        .control-panel {
-            background-color: #f9fbfb;
-            border: 1px solid #d1e5e3;
-            padding: 15px;
-            border-radius: 8px;
+
+        /* 狀態列 */
+        #statusText {
+            font-size: 14px;
+            color: #aaaaaa;
             margin-bottom: 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            align-items: center;
+            background: #222;
+            padding: 6px 12px;
+            border-radius: 20px;
+            display: inline-block;
         }
+
+        /* 下拉選單區塊 */
         .control-group {
             display: flex;
-            align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 25px;
         }
+
+        .control-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
         label {
-            font-weight: bold;
-            color: #2c3e50;
+            font-size: 14px;
+            color: #cccccc;
+            margin-bottom: 5px;
         }
+
         select {
-            padding: 6px 12px;
-            border-radius: 4px;
-            border: 1px solid #cccccc;
-            font-size: 1rem;
+            width: 100%;
+            padding: 10px;
+            background-color: #444;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
             outline: none;
         }
-        .btn-start {
-            background-color: #ff9800;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            font-size: 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
+
+        select:focus {
+            border-color: #ffd700;
         }
-        .btn-start.active {
-            background-color: #4caf50;
-        }
-        .status-bar {
-            width: 100%;
-            font-size: 0.95rem;
-            color: #666;
-            display: flex;
-            justify-content: space-between;
-            border-top: 1px dashed #ddd;
-            padding-top: 10px;
-            margin-top: 5px;
-        }
-        .closest-panel {
-            width: 100%;
-            margin-top: 12px;
-            padding: 12px 18px;
-            background-color: #e3f2fd;
-            border-left: 6px solid #2196f3;
-            border-radius: 4px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-sizing: border-box;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .closest-g-text { color: #0d47a1; font-size: 1.2rem; }
-        .closest-sec-text { color: #d32f2f; font-size: 1.4rem; padding: 0 4px; }
-        
-        .scroll-box {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #e0e0e0;
+
+        /* 主要看板顯示區 */
+        .display-board {
+            background-color: #111;
+            border: 2px solid #444;
             border-radius: 8px;
+            padding: 25px;
+            margin-top: 15px;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-        }
-        th {
-            background-color: #ecf0f1;
-            color: #2c3e50;
+
+        #locationDisplay {
+            font-size: 22px;
+            color: #00ff00;
+            margin-bottom: 15px;
             font-weight: bold;
-            padding: 12px 15px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            border-bottom: 2px solid #bdc3c7;
         }
-        td {
-            padding: 10px 15px;
-            border-bottom: 1px solid #eeeeee;
+
+        #countdownDisplay {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ffffff;
+            margin: 10px 0;
+            transition: color 0.3s ease;
         }
-        tr:nth-child(even) { background-color: #f9fbfb; }
-        .row-num { color: #999; font-weight: bold; text-align: center; width: 50px;}
-        .highlight-b { background-color: #fffde7; }
-        .highlight-e { background-color: #e0f2f1; }
-        .error { background-color: #ffebee; color: #c62828; font-weight: bold; text-align: left; padding: 20px; border-radius: 8px; border: 1px solid #ffcdd2; line-height: 1.6; }
-        .msg-box { padding: 20px; text-align: center; color: #7f8c8d; font-style: italic; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>接車提示系統 </h2>
-    
-    <div class="control-panel">
+    <div class="container">
+        <h1>列車進站倒數監控</h1>
+        <div id="statusText">系統初始化中...</div>
+
         <div class="control-group">
-            <label for="direction">選擇方向：</label>
-            <select id="direction">
-                <option value="1">方向一 </option>
-                <option value="2">方向二 </option>
-            </select>
-        </div>
-        
-        <div class="control-group">
-            <label for="countdown">提示時間：</label>
-            <select id="countdown">
-                <option value="30">30 秒前</option>
-                <option value="45">45 秒前</option>
-                <option value="60">60 秒前</option>
-            </select>
+            <div class="control-item">
+                <label for="directionSelect">選擇監測方向</label>
+                <select id="directionSelect">
+                    <option value="方向一">方向一 (E欄)</option>
+                    <option value="方向二">方向二 (B欄)</option>
+                </select>
+            </div>
+            <div class="control-item">
+                <label for="alertSelect">預警變色秒數</label>
+                <select id="alertSelect">
+                    <option value="30">30 秒</option>
+                    <option value="45" selected>45 秒</option>
+                    <option value="60">60 秒</option>
+                </select>
+            </div>
         </div>
 
-        <button id="start-btn" class="btn-start" onclick="toggleMonitoring()">點擊啟動語音監聽</button>
-        
-        <div class="status-bar">
-            <span>系統狀態：<strong id="sys-status" style="color: #ff9800;">連線中...</strong></span>
-            <span>目前時間：<strong id="current-time-display">--:--:--</strong></span>
-        </div>
-
-        <div class="closest-panel" id="closest-board" style="display: none;">
-            <span>下班接近車次：<strong id="closest-g" class="closest-g-text">--</strong></span>
-            <span>倒數剩餘：<strong id="closest-seconds" class="closest-sec-text">--</strong>秒</span>
+        <div class="display-board">
+            <div id="locationDisplay">相對位置：讀取中...</div>
+            <div id="countdownDisplay">-- 秒</div>
         </div>
     </div>
-    
-    <div class="scroll-box" id="content-container">
-        <div id="loading-msg" class="msg-box">正在從 Google 雲端安全連線下載資料...</div>
-        <table id="data-table" style="display: none;">
-            <thead>
-                <tr>
-                    <th class="row-num">列</th>
-                    <th class="highlight-b">B 欄 (方向二)</th>
-                    <th>C 欄</th>
-                    <th>D 欄</th>
-                    <th class="highlight-e">E 欄 (方向一)</th>
-                    <th>F 欄</th>
-                    <th>G 欄 (語音內容)</th>
-                </tr>
-            </thead>
-            <tbody id="table-body"></tbody>
-        </table>
-    </div>
-</div>
 
-<script>
-    // 完美的發布至網路官方 CSV 連線通道
-    const baseTargetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSB6HZT5XvqBoubvgJ4ittv_w0J4wGfrsLP4Lbt05Coj6jyXqP-cplcyeSqiwgw6uF21ryiH_IFAnxf/pub?gid=1192377503&single=true&output=csv";
-    
-    let sheetRows = [];      
-    let isMonitoring = false;
-    let spokenSet = new Set();
+    <script>
+        // 【已自動帶入】您提供的正確完整 GAS 網頁應用程式網址
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxMkTahf3GyuECOhpIeWDrwa0H4slg6b_CDnz0qgtAKTm4FDB-PjhJShaWU0lavlDBNNA/exec";
 
-    async function fetchSheetData() {
-        try {
-            // 【快取破壞器】確保 Google 每次都必須吐出最新修改的車號
-            const finalUrl = `${baseTargetUrl}&cachebust=${Date.now()}`;
-            
-            const response = await fetch(finalUrl);
-            if (!response.ok) {
-                throw new Error(`Google 伺服器拒絕連線 (HTTP ${response.status})`);
-            }
-            const csvText = await response.text();
-            
-            if (csvText.trim().startsWith('<html') || csvText.trim().startsWith('<!DOCTYPE')) {
-                throw new Error("唯讀連線被截斷，Google 回傳了錯誤的網頁檔案。");
-            }
-            
-            const cleanRows = parseQuotesCSV(csvText);
-            
-            // 智慧型解析與過濾
-            const parsedRows = cleanRows.map((row, index) => ({
-                rowNum: index + 1, 
-                bTime: row[1] ? row[1].trim() : "",
-                cVal: row[2] ? row[2].trim() : "",
-                dVal: row[3] ? row[3].trim() : "",
-                eTime: row[4] ? row[4].trim() : "",
-                fVal: row[5] ? row[5].trim() : "",
-                gText: row[6] ? row[6].trim() : ""
-            })).filter(r => {
-                if (!r.bTime && !r.eTime && !r.gText) return false;
-                if (r.bTime.includes("欄") || r.bTime.includes("方向") || r.eTime.includes("時間")) return false;
-                return true;
-            });
+        // 全域暫存快取：用於儲存從雲端成功抓到的最新資料
+        let globalDataCache = null; 
 
-            // 成功獲取新資料，覆蓋舊資料
-            sheetRows = parsedRows;
+        // 全域變數：紀錄上一次播報過的名字/位置，避免重複播報
+        let lastSpokenLocation = null;
 
-            if (isMonitoring) {
-                document.getElementById('sys-status').textContent = "運作中";
-                document.getElementById('sys-status').style.color = "#4caf50";
+        /**
+         * 核心功能 1：從 GAS 代理伺服器悄悄抓取最新 Excel/Google Sheet 資料
+         */
+        function fetchTrainData() {
+            console.log("正在透過 GAS 代理安全抓取『當天車號』資料...");
+            
+            fetch(GAS_URL)
+                .then(response => response.json())
+                .then(res => {
+                    if (res.status === "success") {
+                        console.log("🎉 雲端資料同步成功！");
+                        globalDataCache = res.data; // 寫入暫存
+                        document.getElementById("statusText").innerText = "雲端狀態：已同步最新車次 (語音功能就緒)";
+                        document.getElementById("statusText").style.color = "#00ff00";
+                        
+                        // 抓完立即更新一次畫面
+                        processTrainLogic(globalDataCache); 
+                    } else {
+                        console.error("GAS 後台回傳錯誤:", res.message);
+                        handleFetchFailure("雲端內部解析錯誤，已啟用歷史暫存");
+                    }
+                })
+                .catch(error => {
+                    console.error("連線至 GAS 失敗（網路問題或遭防火牆封鎖）:", error);
+                    handleFetchFailure("網路連線阻斷，已啟用歷史暫存");
+                });
+        }
+
+        /**
+         * 輔助防護：抓取失敗時的保險降級機制
+         */
+        function handleFetchFailure(reasonText) {
+            const statusEl = document.getElementById("statusText");
+            statusEl.innerText = `狀態：${reasonText}`;
+            statusEl.style.color = "#ff4d4d";
+            
+            if (globalDataCache && globalDataCache.length > 0) {
+                console.log("⚠️ 雖然本次更新失敗，但已為您載入上次成功的暫存資料進行即時倒數。");
+                processTrainLogic(globalDataCache); 
             } else {
-                document.getElementById('sys-status').textContent = "已連線 (待命點擊啟動)";
-                document.getElementById('sys-status').style.color = "#ff9800";
+                document.getElementById("countdownDisplay").innerText = "無法載入";
+                document.getElementById("locationDisplay").innerText = "相對位置：請檢查網路或權限";
+            }
+        }
+
+        /**
+         * 核心功能 2：列車時間比對與倒數切換主要邏輯 (整合雙重語音播報)
+         */
+        function processTrainLogic(sheetData) {
+            if (!sheetData || sheetData.length <= 1) {
+                document.getElementById("countdownDisplay").innerText = "無車次資料";
+                return;
             }
 
-            renderTable();
-        } catch (error) {
-            console.error('抓取失敗，啟動容錯保護:', error);
-            
-            // 【核心升級：斷線保護機制】
-            if (sheetRows.length > 0) {
-                // 如果本來就已經有成功的舊資料，完全不更動畫面，只修改狀態列提示
-                document.getElementById('sys-status').textContent = "自動更新失敗 (已為您維持前次成功資料)";
-                document.getElementById('sys-status').style.color = "#de3e3e";
-            } else {
-                // 只有第一次完全沒載入過資料時，才顯示大紅框錯誤
-                document.getElementById('sys-status').textContent = "雲端連線失敗";
-                document.getElementById('sys-status').style.color = "#de3e3e";
+            // 讀取當前選單的值
+            const selectedDirection = document.getElementById("directionSelect").value;
+            const alertSeconds = parseInt(document.getElementById("alertSelect").value, 10) || 45;
+
+            // 欄位定義：方向一 = E欄 (索引4), 方向二 = B欄 (索引1), 相對位置 = G欄 (索引6)
+            const timeColIndex = (selectedDirection === "方向一") ? 4 : 1;
+            const gColIndex = 6; 
+
+            const now = new Date();
+            let targetRow = null;
+            let minDiffSeconds = Infinity;
+
+            // 從第二列（索引 1）開始過濾整張表
+            for (let i = 1; i < sheetData.length; i++) {
+                const row = sheetData[i];
+                const timeValue = row[timeColIndex];
                 
-                const container = document.getElementById('content-container');
-                if(container) {
-                    container.innerHTML = `
-                        <div class="error">
-                            <strong>❌ 雲端資料即時讀取失敗</strong><br>
-                            <span style="color:#555; font-size:0.9rem;">錯誤細節：${error.message || '廠區網路或防火牆連線中斷'}</span>
-                            <hr style="border:0; border-top:1px solid #ffcdd2; margin:10px 0;">
-                            <strong>請檢查以下項目：</strong><br>
-                            1. 如果您在公務或特定公司廠區，請確認手機是否接著公司的阻擋型 Wi-Fi。請嘗試切換為<b>手機 4G/5G 行動網路</b>重新載入看看。<br>
-                            2. 請確認試算表網頁中的「發布到網路」功能有沒有不小心被關閉。
-                        </div>`;
+                if (!timeValue) continue; 
+
+                // 轉成今日的正確時間物件
+                const trainTime = parseToTodayDate(timeValue);
+                if (!trainTime) continue;
+
+                // 計算與現在時間的差距秒數
+                const diffSeconds = Math.floor((trainTime - now) / 1000);
+
+                // 【關鍵邏輯】車子開走超過 20 秒（即 diffSeconds < -20）才判定失效，否則一律保留顯示
+                if (diffSeconds >= -20) {
+                    // 尋找距離現在最近的那一班車
+                    if (diffSeconds < minDiffSeconds) {
+                        minDiffSeconds = diffSeconds;
+                        targetRow = row;
+                    }
                 }
             }
-        }
-    }
 
-    function parseQuotesCSV(text) {
-        let lines = text.split(/\r?\n/);
-        return lines.map(line => {
-            let result = [];
-            let current = '';
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-                let char = line[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                    result.push(current);
-                    current = '';
+            // UI 渲染與著色邏輯
+            const countdownEl = document.getElementById("countdownDisplay");
+            const locationEl = document.getElementById("locationDisplay");
+
+            if (targetRow) {
+                const locationG = targetRow[gColIndex] || "未註記位置";
+                locationEl.innerText = `相對位置：${locationG}`;
+
+                if (minDiffSeconds < 0) {
+                    // 車子剛走，在 20 秒內的緩衝顯示狀態
+                    countdownEl.innerText = `列車已過：${Math.abs(minDiffSeconds)} 秒`;
+                    countdownEl.style.color = "#888888";
+                    countdownEl.style.fontWeight = "normal";
                 } else {
-                    current += char;
+                    // 正常未到站倒數狀態
+                    countdownEl.innerText = `${minDiffSeconds} 秒`;
+                    
+                    // 【提示秒數變色邏輯】進入警戒秒數範圍：變紅、變粗
+                    if (minDiffSeconds <= alertSeconds) {
+                        countdownEl.style.color = "#ff4d4d";
+                        countdownEl.style.fontWeight = "bold";
+
+                        // --- 【修改區】念出名字 + 請準備接車，重複兩次 ---
+                        if (minDiffSeconds > 0 && locationG !== lastSpokenLocation) {
+                            // 組合播報字串，加上逗號與句號讓 AI 語音停頓更自然
+                            const alertPhrase = `${locationG}，請準備接車。${locationG}，請準備接車。`;
+                            
+                            console.log(`即將進入預警範圍，連續播報兩次：${alertPhrase}`);
+                            speakLocation(alertPhrase); // 呼叫播報
+                            lastSpokenLocation = locationG; // 鎖定此車次位置，避免每一秒重複呼叫
+                        }
+                        // ----------------------------------------------
+
+                    } else {
+                        countdownEl.style.color = "#ffffff";
+                        countdownEl.style.fontWeight = "normal";
+                    }
                 }
-            }
-            result.push(current);
-            return result;
-        });
-    }
-
-    function renderTable() {
-        const tableBody = document.getElementById('table-body');
-        const loadingMsg = document.getElementById('loading-msg');
-        const dataTable = document.getElementById('data-table');
-        
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        if (dataTable) dataTable.style.display = 'table';
-        if (!tableBody) return;
-        
-        tableBody.innerHTML = '';
-
-        sheetRows.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="row-num">${row.rowNum}</td>
-                <td class="highlight-b">${row.bTime}</td>
-                <td>${row.cVal}</td>
-                <td>${row.dVal}</td>
-                <td class="highlight-e">${row.eTime}</td>
-                <td>${row.fVal}</td>
-                <td>${row.gText}</td>
-            `;
-            tableBody.appendChild(tr);
-        });
-    }
-
-    function toggleMonitoring() {
-        const btn = document.getElementById('start-btn');
-        const statusText = document.getElementById('sys-status');
-        
-        isMonitoring = !isMonitoring;
-        
-        if (isMonitoring) {
-            btn.textContent = "監聽中 (點擊停止)";
-            btn.classList.add('active');
-            statusText.textContent = "運作中";
-            statusText.style.color = "#4caf50";
-            playVoice("語音系統啟動成功");
-        } else {
-            btn.textContent = "點擊啟動語音監聽";
-            btn.classList.remove('active');
-            statusText.textContent = "已暫停";
-            statusText.style.color = "#ff9800";
-        }
-    }
-
-    function playVoice(text) {
-        if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'zh-TW'; 
-            utterance.rate = 1.0;     
-            window.speechSynthesis.speak(utterance);
-        }
-    }
-
-    function coreTimerLoop() {
-        const now = new Date();
-        document.getElementById('current-time-display').textContent = now.toTimeString().split(' ')[0];
-
-        if (sheetRows.length === 0) return;
-
-        const selectedDir = document.getElementById('direction').value; 
-        const configSeconds = parseInt(document.getElementById('countdown').value); 
-
-        let closestRow = null;
-        let minDiff = Infinity;
-
-        sheetRows.forEach(row => {
-            const timeStr = (selectedDir === "1") ? row.eTime : row.bTime;
-            if (!timeStr || !row.gText) return; 
-
-            const timeParts = timeStr.split(':');
-            if (timeParts.length < 2) return;
-
-            const targetDate = new Date(now.getTime());
-            targetDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2] ? parseInt(timeParts[2]) : 0, 0);
-
-            const diffSeconds = Math.round((targetDate - now) / 1000);
-            const uniqueId = `${row.rowNum}_${timeStr}_${selectedDir}`;
-
-            // 只有在啟動監聽時才播報語音
-            if (isMonitoring && diffSeconds <= configSeconds && diffSeconds > (configSeconds - 3)) {
-                if (!spokenSet.has(uniqueId)) {
-                    spokenSet.add(uniqueId); 
-                    const speechText = `${row.gText}，請準備上車`;
-                    console.log(`【播報觸發】${speechText} (剩餘 ${diffSeconds} 秒)`);
-                    playVoice(speechText);
-                }
-            }
-
-            if (diffSeconds >= -20 && diffSeconds < minDiff) {
-                minDiff = diffSeconds;
-                closestRow = row;
-            }
-        });
-
-        const boardElement = document.getElementById('closest-board');
-        const gElement = document.getElementById('closest-g');
-        const secElement = document.getElementById('closest-seconds');
-
-        if (closestRow) {
-            boardElement.style.display = 'flex'; 
-            gElement.textContent = closestRow.gText; 
-            
-            if (minDiff >= 0) {
-                secElement.textContent = minDiff;
-                secElement.style.color = '#d32f2f'; 
             } else {
-                secElement.textContent = `已過 ${Math.abs(minDiff)}`;
-                secElement.style.color = '#757575'; 
+                countdownEl.innerText = "今日已無班次";
+                countdownEl.style.color = "#888888";
+                locationEl.innerText = "相對位置：--";
+                lastSpokenLocation = null; // 重置標記
             }
-        } else {
-            boardElement.style.display = 'flex';
-            gElement.textContent = "今日已無後續車次";
-            secElement.textContent = "--";
-            secElement.style.color = '#757575';
         }
-    }
 
-    window.onload = () => {
-        fetchSheetData();
-        setInterval(fetchSheetData, 300000); // 每 5 分鐘安全定時自動聯網更新
-        setInterval(coreTimerLoop, 1000);   
-    };
-</script>
+        /**
+         * 輔助工具：念出文字內容
+         */
+        function speakLocation(text) {
+            if ('speechSynthesis' in window) {
+                // 如果前一班車還沒念完，先強制中斷，避免語音塞車延遲
+                window.speechSynthesis.cancel();
 
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-TW'; // 設定台灣中文
+                utterance.rate = 1.0;     // 語速 (1.0 為正常速度)
+                
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.warn("瀏覽器不支援語音合成功能。");
+                document.getElementById("statusText").innerText = "狀態：瀏覽器不支援語音";
+            }
+        }
+
+        /**
+         * 輔助工具：精準解析 Google Sheet 時間欄位
+         */
+        function parseToTodayDate(input) {
+            const today = new Date();
+            if (!input) return null;
+
+            // 處理 ISO 標準格式
+            if (typeof input === "string" && input.includes("T")) {
+                const d = new Date(input);
+                d.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
+                return d;
+            }
+            
+            // 處理常見文字格式 (如 "08:30" 或 "14:25:00")
+            const parts = input.toString().split(":");
+            if (parts.length >= 2) {
+                const hrs = parseInt(parts[0], 10);
+                const mins = parseInt(parts[1], 10);
+                const secs = parts[2] ? parseInt(parts[2], 10) : 0;
+                
+                const d = new Date();
+                d.setHours(hrs, mins, secs, 0);
+                return d;
+            }
+            return null;
+        }
+
+        // ==========================================
+        //  計時器與事件監聽排程
+        // ==========================================
+
+        // 排程 1：每 5 分鐘自動在背景找 GAS 代理伺服器更新一次核心試算表資料
+        setInterval(fetchTrainData, 5 * 60 * 1000);
+        fetchTrainData(); // 初始化載入
+
+        // 排程 2：每 1 秒鐘執行一次畫面重繪
+        setInterval(() => {
+            if (globalDataCache) {
+                processTrainLogic(globalDataCache);
+            }
+        }, 1000);
+
+        // 排程 3：切換監測方向時，立即重置播報鎖定，確保新方向的車次能立刻念出來
+        document.getElementById("directionSelect").addEventListener("change", () => {
+            lastSpokenLocation = null; 
+            if (globalDataCache) processTrainLogic(globalDataCache);
+        });
+        document.getElementById("alertSelect").addEventListener("change", () => {
+            if (globalDataCache) processTrainLogic(globalDataCache);
+        });
+
+    </script>
 </body>
 </html>
