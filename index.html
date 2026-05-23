@@ -133,14 +133,14 @@
         .row-num { color: #999; font-weight: bold; text-align: center; width: 50px;}
         .highlight-b { background-color: #fffde7; }
         .highlight-e { background-color: #e0f2f1; }
-        .error { color: #de3e3e; font-weight: bold; text-align: center; padding: 15px; }
+        .error { background-color: #ffebee; color: #c62828; font-weight: bold; text-align: left; padding: 20px; border-radius: 8px; border: 1px solid #ffcdd2; line-height: 1.6; }
         .msg-box { padding: 20px; text-align: center; color: #7f8c8d; font-style: italic; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>當天車號語音提示系統</h2>
+    <h2>當天車號語音提示系統 ("當天車號" 專用分頁版)</h2>
     
     <div class="control-panel">
         <div class="control-group">
@@ -163,7 +163,7 @@
         <button id="start-btn" class="btn-start" onclick="toggleMonitoring()">點擊啟動語音監聽</button>
         
         <div class="status-bar">
-            <span>系統狀態：<strong id="sys-status" style="color: #ff9800;">未啟動 (瀏覽器限制語音需點擊啟動)</strong></span>
+            <span>系統狀態：<strong id="sys-status" style="color: #ff9800;">連線中...</strong></span>
             <span>目前時間：<strong id="current-time-display">--:--:--</strong></span>
         </div>
 
@@ -174,7 +174,7 @@
     </div>
     
     <div class="scroll-box" id="content-container">
-        <div id="loading-msg" class="msg-box">資料下載中...</div>
+        <div id="loading-msg" class="msg-box">正在從 Google 雲端安全連線下載資料...</div>
         <table id="data-table" style="display: none;">
             <thead>
                 <tr>
@@ -193,9 +193,8 @@
 </div>
 
 <script>
-    // 【終極修復】請把下方引號內的文字替換成你試算表的真實 ID KEY（保留引號）
-    const sheetId = "【把這裡換成你複製的試算表ID】";
-    const targetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=1192377503`;
+    // 完美的發布至網路官方 CSV 連線通道 (已指定 gid=1192377503 當天車號分頁)
+    const baseTargetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSB6HZT5XvqBoubvgJ4ittv_w0J4wGfrsLP4Lbt05Coj6jyXqP-cplcyeSqiwgw6uF21ryiH_IFAnxf/pub?gid=1192377503&single=true&output=csv";
     
     let sheetRows = [];      
     let isMonitoring = false;
@@ -203,28 +202,44 @@
 
     async function fetchSheetData() {
         try {
-            const response = await fetch(targetUrl);
-            if (!response.ok) throw new Error();
+            // 【快取破壞器】動態加上時間戳記，確保 Google 每次都必須吐出最新修改的車號，不再卡死在舊快取
+            const finalUrl = `${baseTargetUrl}&cachebust=${Date.now()}`;
+            
+            const response = await fetch(finalUrl);
+            if (!response.ok) {
+                throw new Error(`Google 伺服器拒絕連線 (HTTP ${response.status})`);
+            }
             const csvText = await response.text();
             
-            // 處理 Google gviz API 回傳帶引號包裹的 CSV 格式
+            // 安全防禦：如果回傳的是登入網頁的 HTML 則報錯
+            if (csvText.trim().startsWith('<html') || csvText.trim().startsWith('<!DOCTYPE')) {
+                throw new Error("唯讀連線被截斷，Google 回傳了錯誤的網頁網案。");
+            }
+            
             const cleanRows = parseQuotesCSV(csvText);
             
-            sheetRows = cleanRows.slice(8, 500).map((row, index) => ({
-                rowNum: index + 9,
+            // 智慧型對齊：不再死板切除前8列，從第2列開始全面檢索，自動對齊試算表的真實 row 號碼！
+            sheetRows = cleanRows.map((row, index) => ({
+                rowNum: index + 1, // 完美的真實 Excel 列號
                 bTime: row[1] ? row[1].trim() : "",
                 cVal: row[2] ? row[2].trim() : "",
                 dVal: row[3] ? row[3].trim() : "",
                 eTime: row[4] ? row[4].trim() : "",
                 fVal: row[5] ? row[5].trim() : "",
                 gText: row[6] ? row[6].trim() : ""
-            })).filter(r => r.bTime || r.eTime || r.gText);
+            })).filter(r => {
+                // 過濾掉完全空白的列
+                if (!r.bTime && !r.eTime && !r.gText) return false;
+                // 過濾掉可能不小心抓到的標題中文字列
+                if (r.bTime.includes("欄") || r.bTime.includes("方向") || r.eTime.includes("時間")) return false;
+                return true;
+            });
 
             if (isMonitoring) {
                 document.getElementById('sys-status').textContent = "運作中";
                 document.getElementById('sys-status').style.color = "#4caf50";
             } else {
-                document.getElementById('sys-status').textContent = "已暫停";
+                document.getElementById('sys-status').textContent = "已連線 (待命點擊啟動)";
                 document.getElementById('sys-status').style.color = "#ff9800";
             }
 
@@ -236,12 +251,20 @@
             
             const container = document.getElementById('content-container');
             if(container && sheetRows.length === 0) {
-                container.innerHTML = `<div class="error">無法讀取資料，請確認試算表共用權限已設為「任何人皆可檢視」，並確認試算表 ID 是否正確。</div>`;
+                container.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 雲端資料即時讀取失敗</strong><br>
+                        <span style="color:#555; font-size:0.9rem;">錯誤細節：${error.message || '廠區網路或防火牆連線中斷'}</span>
+                        <hr style="border:0; border-top:1px solid #ffcdd2; margin:10px 0;">
+                        <strong>請檢查以下項目：</strong><br>
+                        1. 如果您在公務或特定公司廠區，請確認手機是否接著公司的阻擋型 Wi-Fi。請嘗試切換為<b>手機 4G/5G 行動網路</b>重新載入看看。<br>
+                        2. 請確認試算表網頁中的「發布到網路」功能有沒有不小心被關閉。
+                    </div>`;
             }
         }
     }
 
-    // 專用解析器：處理帶有引號的複雜 CSV 格式
+    // CSV 解析核心
     function parseQuotesCSV(text) {
         let lines = text.split(/\r?\n/);
         return lines.map(line => {
@@ -384,7 +407,7 @@
 
     window.onload = () => {
         fetchSheetData();
-        setInterval(fetchSheetData, 300000); 
+        setInterval(fetchSheetData, 300000); // 5 分鐘後聯網強制刷新
         setInterval(coreTimerLoop, 1000);   
     };
 </script>
