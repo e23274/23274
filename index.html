@@ -193,7 +193,7 @@
 </div>
 
 <script>
-    // 完美的發布至網路官方 CSV 連線通道 (已指定 gid=1192377503 當天車號分頁)
+    // 完美的發布至網路官方 CSV 連線通道
     const baseTargetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSB6HZT5XvqBoubvgJ4ittv_w0J4wGfrsLP4Lbt05Coj6jyXqP-cplcyeSqiwgw6uF21ryiH_IFAnxf/pub?gid=1192377503&single=true&output=csv";
     
     let sheetRows = [];      
@@ -202,7 +202,7 @@
 
     async function fetchSheetData() {
         try {
-            // 【快取破壞器】動態加上時間戳記，確保 Google 每次都必須吐出最新修改的車號，不再卡死在舊快取
+            // 【快取破壞器】確保 Google 每次都必須吐出最新修改的車號
             const finalUrl = `${baseTargetUrl}&cachebust=${Date.now()}`;
             
             const response = await fetch(finalUrl);
@@ -211,16 +211,15 @@
             }
             const csvText = await response.text();
             
-            // 安全防禦：如果回傳的是登入網頁的 HTML 則報錯
             if (csvText.trim().startsWith('<html') || csvText.trim().startsWith('<!DOCTYPE')) {
-                throw new Error("唯讀連線被截斷，Google 回傳了錯誤的網頁網案。");
+                throw new Error("唯讀連線被截斷，Google 回傳了錯誤的網頁檔案。");
             }
             
             const cleanRows = parseQuotesCSV(csvText);
             
-            // 智慧型對齊：不再死板切除前8列，從第2列開始全面檢索，自動對齊試算表的真實 row 號碼！
-            sheetRows = cleanRows.map((row, index) => ({
-                rowNum: index + 1, // 完美的真實 Excel 列號
+            // 智慧型解析與過濾
+            const parsedRows = cleanRows.map((row, index) => ({
+                rowNum: index + 1, 
                 bTime: row[1] ? row[1].trim() : "",
                 cVal: row[2] ? row[2].trim() : "",
                 dVal: row[3] ? row[3].trim() : "",
@@ -228,12 +227,13 @@
                 fVal: row[5] ? row[5].trim() : "",
                 gText: row[6] ? row[6].trim() : ""
             })).filter(r => {
-                // 過濾掉完全空白的列
                 if (!r.bTime && !r.eTime && !r.gText) return false;
-                // 過濾掉可能不小心抓到的標題中文字列
                 if (r.bTime.includes("欄") || r.bTime.includes("方向") || r.eTime.includes("時間")) return false;
                 return true;
             });
+
+            // 成功獲取新資料，覆蓋舊資料
+            sheetRows = parsedRows;
 
             if (isMonitoring) {
                 document.getElementById('sys-status').textContent = "運作中";
@@ -245,26 +245,34 @@
 
             renderTable();
         } catch (error) {
-            console.error('抓取失敗:', error);
-            document.getElementById('sys-status').textContent = "雲端更新失敗";
-            document.getElementById('sys-status').style.color = "#de3e3e";
+            console.error('抓取失敗，啟動容錯保護:', error);
             
-            const container = document.getElementById('content-container');
-            if(container && sheetRows.length === 0) {
-                container.innerHTML = `
-                    <div class="error">
-                        <strong>❌ 雲端資料即時讀取失敗</strong><br>
-                        <span style="color:#555; font-size:0.9rem;">錯誤細節：${error.message || '廠區網路或防火牆連線中斷'}</span>
-                        <hr style="border:0; border-top:1px solid #ffcdd2; margin:10px 0;">
-                        <strong>請檢查以下項目：</strong><br>
-                        1. 如果您在公務或特定公司廠區，請確認手機是否接著公司的阻擋型 Wi-Fi。請嘗試切換為<b>手機 4G/5G 行動網路</b>重新載入看看。<br>
-                        2. 請確認試算表網頁中的「發布到網路」功能有沒有不小心被關閉。
-                    </div>`;
+            // 【核心升級：斷線保護機制】
+            if (sheetRows.length > 0) {
+                // 如果本來就已經有成功的舊資料，完全不更動畫面，只修改狀態列提示
+                document.getElementById('sys-status').textContent = "自動更新失敗 (已為您維持前次成功資料)";
+                document.getElementById('sys-status').style.color = "#de3e3e";
+            } else {
+                // 只有第一次完全沒載入過資料時，才顯示大紅框錯誤
+                document.getElementById('sys-status').textContent = "雲端連線失敗";
+                document.getElementById('sys-status').style.color = "#de3e3e";
+                
+                const container = document.getElementById('content-container');
+                if(container) {
+                    container.innerHTML = `
+                        <div class="error">
+                            <strong>❌ 雲端資料即時讀取失敗</strong><br>
+                            <span style="color:#555; font-size:0.9rem;">錯誤細節：${error.message || '廠區網路或防火牆連線中斷'}</span>
+                            <hr style="border:0; border-top:1px solid #ffcdd2; margin:10px 0;">
+                            <strong>請檢查以下項目：</strong><br>
+                            1. 如果您在公務或特定公司廠區，請確認手機是否接著公司的阻擋型 Wi-Fi。請嘗試切換為<b>手機 4G/5G 行動網路</b>重新載入看看。<br>
+                            2. 請確認試算表網頁中的「發布到網路」功能有沒有不小心被關閉。
+                        </div>`;
+                }
             }
         }
     }
 
-    // CSV 解析核心
     function parseQuotesCSV(text) {
         let lines = text.split(/\r?\n/);
         return lines.map(line => {
@@ -346,7 +354,7 @@
         const now = new Date();
         document.getElementById('current-time-display').textContent = now.toTimeString().split(' ')[0];
 
-        if (!isMonitoring || sheetRows.length === 0) return;
+        if (sheetRows.length === 0) return;
 
         const selectedDir = document.getElementById('direction').value; 
         const configSeconds = parseInt(document.getElementById('countdown').value); 
@@ -367,7 +375,8 @@
             const diffSeconds = Math.round((targetDate - now) / 1000);
             const uniqueId = `${row.rowNum}_${timeStr}_${selectedDir}`;
 
-            if (diffSeconds <= configSeconds && diffSeconds > (configSeconds - 3)) {
+            // 只有在啟動監聽時才播報語音
+            if (isMonitoring && diffSeconds <= configSeconds && diffSeconds > (configSeconds - 3)) {
                 if (!spokenSet.has(uniqueId)) {
                     spokenSet.add(uniqueId); 
                     const speechText = `${row.gText}，請準備上車`;
@@ -407,7 +416,7 @@
 
     window.onload = () => {
         fetchSheetData();
-        setInterval(fetchSheetData, 300000); // 5 分鐘後聯網強制刷新
+        setInterval(fetchSheetData, 300000); // 每 5 分鐘安全定時自動聯網更新
         setInterval(coreTimerLoop, 1000);   
     };
 </script>
