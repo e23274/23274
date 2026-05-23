@@ -193,48 +193,24 @@
 </div>
 
 <script>
-    const targetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSB6HZT5XvqBoubvgJ4ittv_w0J4wGfrsLP4Lbt05Coj6jyXqP-cplcyeSqiwgw6uF21ryiH_IFAnxf/pub?gid=1192377503&single=true&output=csv";
+    // 【終極修復】請把下方引號內的文字替換成你試算表的真實 ID KEY（保留引號）
+    const sheetId = "【把這裡換成你複製的試算表ID】";
+    const targetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=1192377503`;
     
     let sheetRows = [];      
     let isMonitoring = false;
     let spokenSet = new Set();
 
     async function fetchSheetData() {
-        // 【核心連線修正】設定雙代理備案機制
-        const proxyA = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-        const proxyB = `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(targetUrl)}`;
-        
-        let response;
         try {
-            // 1. 優先嘗試原本成功的代理 A
-            response = await fetch(proxyA);
-            if (!response.ok) throw new Error("Proxy A 異常");
-        } catch (errorFromA) {
-            console.warn("主代理服務繁忙，啟動備用連線方案...");
-            try {
-                // 2. 失敗時，秒級切換至官方認證的備用代理 B
-                response = await fetch(proxyB);
-                if (!response.ok) throw new Error("Proxy B 亦異常");
-            } catch (errorFromB) {
-                // 3. 極極極端狀況下兩台都掛掉，才會進到錯誤提示
-                console.error('所有雲端代理皆無法連線:', errorFromB);
-                document.getElementById('sys-status').textContent = "雲端更新失敗";
-                document.getElementById('sys-status').style.color = "#de3e3e";
-                
-                const container = document.getElementById('content-container');
-                if(container && sheetRows.length === 0) {
-                    container.innerHTML = `<div class="error">無法讀取資料，請確認網絡連線或稍後再試。</div>`;
-                }
-                return; // 中斷後續解析
-            }
-        }
-
-        // 解析獲取到的資料
-        try {
+            const response = await fetch(targetUrl);
+            if (!response.ok) throw new Error();
             const csvText = await response.text();
-            const rows = csvText.split(/\r?\n/).map(row => row.split(','));
             
-            sheetRows = rows.slice(8, 500).map((row, index) => ({
+            // 處理 Google gviz API 回傳帶引號包裹的 CSV 格式
+            const cleanRows = parseQuotesCSV(csvText);
+            
+            sheetRows = cleanRows.slice(8, 500).map((row, index) => ({
                 rowNum: index + 9,
                 bTime: row[1] ? row[1].trim() : "",
                 cVal: row[2] ? row[2].trim() : "",
@@ -253,9 +229,39 @@
             }
 
             renderTable();
-        } catch (parseError) {
-            console.error("資料格式解析失敗:", parseError);
+        } catch (error) {
+            console.error('抓取失敗:', error);
+            document.getElementById('sys-status').textContent = "雲端更新失敗";
+            document.getElementById('sys-status').style.color = "#de3e3e";
+            
+            const container = document.getElementById('content-container');
+            if(container && sheetRows.length === 0) {
+                container.innerHTML = `<div class="error">無法讀取資料，請確認試算表共用權限已設為「任何人皆可檢視」，並確認試算表 ID 是否正確。</div>`;
+            }
         }
+    }
+
+    // 專用解析器：處理帶有引號的複雜 CSV 格式
+    function parseQuotesCSV(text) {
+        let lines = text.split(/\r?\n/);
+        return lines.map(line => {
+            let result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                let char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        });
     }
 
     function renderTable() {
@@ -378,7 +384,7 @@
 
     window.onload = () => {
         fetchSheetData();
-        setInterval(fetchSheetData, 300000); // 5 分鐘安全間隔更新一次
+        setInterval(fetchSheetData, 300000); 
         setInterval(coreTimerLoop, 1000);   
     };
 </script>
