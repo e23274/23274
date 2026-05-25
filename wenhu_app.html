@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文湖線路段注意點動態提示系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 250px; width: 100%; border-radius: 8px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans pb-10">
+
+    <header class="bg-amber-800 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">文湖線注意點系統</h1>
+            <select id="directionSelect" class="bg-amber-700 text-white p-2 rounded border border-amber-600 focus:outline-none" onchange="handleDirectionChange()">
+                <option value="up">上行 (動物園 → 展覽館)</option>
+                <option value="down">下行 (展覽館 → 動物園)</option>
+            </select>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4 space-y-4">
+
+        <section class="bg-white p-4 rounded-xl shadow">
+            <h2 class="text-sm font-semibold text-gray-500 mb-2">📡 即時定位狀態</h2>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="bg-gray-50 p-2 rounded">
+                    <span class="block text-gray-400 text-xs">當前鎖定車站</span>
+                    <span id="currentStationTxt" class="font-bold text-base text-amber-900">偵測中...</span>
+                </div>
+                <div class="bg-gray-50 p-2 rounded">
+                    <span class="block text-gray-400 text-xs">下一站預期</span>
+                    <span id="nextStationTxt" class="font-bold text-base text-gray-700">偵測中...</span>
+                </div>
+            </div>
+            <p id="gpsStatus" class="text-xs text-blue-600 mt-2">正在讀取 GPS 訊號...</p>
+        </section>
+
+        <section class="bg-white p-4 rounded-xl shadow">
+            <h2 class="text-sm font-semibold text-gray-500 mb-2">🗺️ 沿線地圖</h2>
+            <div id="map"></div>
+        </section>
+
+        <section class="bg-white p-4 rounded-xl shadow border-l-4 border-amber-500">
+            <h2 class="text-sm font-semibold text-amber-800 mb-2 flex items-center justify-between">
+                <span>⚠️ 當前行駛區間注意點</span>
+                <span id="intervalLabel" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">未定</span>
+            </h2>
+            <div id="activeNoticeContainer" class="space-y-4 pt-2">
+                <p class="text-sm text-gray-400 italic">目前該區間無注意點，或尚未進入文湖線範圍。</p>
+            </div>
+        </section>
+
+        <hr class="border-gray-300 my-6">
+
+        <section class="bg-white p-4 rounded-xl shadow">
+            <h2 class="text-lg font-bold text-gray-800 mb-3">➕ 新增區間注意點</h2>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-gray-600 font-medium mb-1">選擇起點車站</label>
+                    <select id="noticeStation" class="w-full p-2 border rounded bg-gray-50"></select>
+                </div>
+                <div>
+                    <label class="block text-gray-600 font-medium mb-1">行駛方向</label>
+                    <div class="flex gap-4">
+                        <label><input type="radio" name="noticeDir" value="up" checked> 上行</label>
+                        <label><input type="radio" name="noticeDir" value="down"> 下行</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-gray-600 font-medium mb-1">注意點說明文字</label>
+                    <textarea id="noticeText" rows="2" class="w-full p-2 border rounded bg-gray-50" placeholder="請輸入此路段的特別注意事項..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-gray-600 font-medium mb-1">上傳現場圖片</label>
+                    <input type="file" id="noticeImg" accept="image/*" class="w-full text-xs">
+                </div>
+                <button onclick="saveNotice()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded shadow transition">儲存此注意點</button>
+            </div>
+        </section>
+
+        <section class="bg-white p-4 rounded-xl shadow">
+            <h2 class="text-lg font-bold text-gray-800 mb-3">⚙️ 車站 GPS 座標微調補救</h2>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-gray-600 font-medium mb-1">選擇欲校正車站</label>
+                    <select id="calibrateStation" class="w-full p-2 border rounded bg-gray-50" onchange="loadCalibrateField()"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs text-gray-500">自訂緯度 (Lat)</label>
+                        <input type="number" id="customLat" step="0.000001" class="w-full p-2 border rounded bg-gray-50" placeholder="未設定（採初始值）">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500">自訂經度 (Lng)</label>
+                        <input type="number" id="customLng" step="0.000001" class="w-full p-2 border rounded bg-gray-50" placeholder="未設定（採初始值）">
+                    </div>
+                </div>
+                <button onclick="saveCalibration()" class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 rounded shadow transition">儲存校正座標</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // 1. 24站文湖線正確初始資料 (需求2)
+        const BASE_STATIONS = [
+            { id: "BR01", name: "動物園", lat: 24.9982, lng: 121.5793 },
+            { id: "BR02", name: "木柵", lat: 24.9987, lng: 121.5731 },
+            { id: "BR03", name: "萬芳社區", lat: 25.0013, lng: 121.5676 },
+            { id: "BR04", name: "萬芳醫院", lat: 24.9998, lng: 121.5583 },
+            { id: "BR05", name: "辛亥", lat: 25.0054, lng: 121.5560 },
+            { id: "BR06", name: "麟光", lat: 25.0227, lng: 121.5585 },
+            { id: "BR07", name: "六張犁", lat: 25.0250, lng: 121.5531 },
+            { id: "BR08", name: "科技大樓", lat: 25.0261, lng: 121.5435 },
+            { id: "BR09", name: "大安", lat: 25.0329, lng: 121.5435 },
+            { id: "BR10", name: "忠孝復興", lat: 25.0416, lng: 121.5434 },
+            { id: "BR11", name: "南京復興", lat: 25.0519, lng: 121.5434 },
+            { id: "BR12", name: "中山國中", lat: 25.0608, lng: 121.5442 },
+            { id: "BR13", name: "松山機場", lat: 25.0633, lng: 121.5517 },
+            { id: "BR14", name: "大直", lat: 25.0795, lng: 121.5469 },
+            { id: "BR15", name: "劍南路", lat: 25.0848, lng: 121.5555 },
+            { id: "BR16", name: "西湖", lat: 25.0821, lng: 121.5672 },
+            { id: "BR17", name: "港墘", lat: 25.0800, lng: 121.5750 },
+            { id: "BR18", name: "文德", lat: 25.0785, lng: 121.5847 },
+            { id: "BR19", name: "內湖", lat: 25.0837, lng: 121.5941 },
+            { id: "BR20", name: "大湖公園", lat: 25.0838, lng: 121.6022 },
+            { id: "BR21", name: "葫洲", lat: 25.0726, lng: 121.6073 },
+            { id: "BR22", name: "東湖", lat: 25.0671, lng: 121.6115 },
+            { id: "BR23", name: "南港軟體園區", lat: 25.0599, lng: 121.6160 },
+            { id: "BR24", name: "南港展覽館", lat: 25.0553, lng: 121.6175 }
+        ];
+
+        let map, userMarker;
+        let currentStationIndex = null; // 當前鎖定站索引
+
+        // 初始化載入
+        window.onload = function() {
+            initUI();
+            initMap();
+            startGpsTracking();
+        };
+
+        // 初始化下拉選單與表單
+        function initUI() {
+            const noticeSelect = document.getElementById('noticeStation');
+            const calibrateSelect = document.getElementById('calibrateStation');
+            
+            BASE_STATIONS.forEach(st => {
+                let opt1 = new Option(`${st.id} ${st.name}`, st.id);
+                let opt2 = new Option(`${st.id} ${st.name}`, st.id);
+                noticeSelect.add(opt1);
+                calibrateSelect.add(opt2);
+            });
+            loadCalibrateField();
+        }
+
+        // 地圖初始化
+        function initMap() {
+            // 預設中心點設在捷運大安站
+            map = L.map('map').setView([25.0329, 121.5435], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // 畫出捷運文湖線路線
+            const lineCoords = BASE_STATIONS.map(st => {
+                let actual = getActiveCoords(st.id);
+                return [actual.lat, actual.lng];
+            });
+            L.polyline(lineCoords, {color: '#965C1F', weight: 4, opacity: 0.7}).addTo(map);
+
+            // 在地圖上標示車站
+            BASE_STATIONS.forEach(st => {
+                let actual = getActiveCoords(st.id);
+                L.circleMarker([actual.lat, actual.lng], {
+                    radius: 5,
+                    color: '#965C1F',
+                    fillColor: '#FFF',
+                    fillOpacity: 1
+                }).addTo(map).bindPopup(`${st.id} ${st.name}`);
+            });
+
+            // 使用者目前位置標記
+            userMarker = L.marker([0, 0]).addTo(map).bindPopup("您的目前位置");
+        }
+
+        // 取得生效的座標（優先採用使用者覆蓋的自訂值）(需求1)
+        function getActiveCoords(stationId) {
+            const base = BASE_STATIONS.find(s => s.id === stationId);
+            const overrides = JSON.parse(localStorage.getItem('station_overrides') || '{}');
+            if (overrides[stationId]) {
+                return { lat: parseFloat(overrides[stationId].lat), lng: parseFloat(overrides[stationId].lng) };
+            }
+            return { lat: base.lat, lng: base.lng };
+        }
+
+        // 載入當前選擇站點的校正欄位數據
+        function loadCalibrateField() {
+            const id = document.getElementById('calibrateStation').value;
+            const overrides = JSON.parse(localStorage.getItem('station_overrides') || '{}');
+            if (overrides[id]) {
+                document.getElementById('customLat').value = overrides[id].lat;
+                document.getElementById('customLng').value = overrides[id].lng;
+            } else {
+                document.getElementById('customLat').value = '';
+                document.getElementById('customLng').value = '';
+            }
+        }
+
+        // 儲存校正座標 (需求1)
+        function saveCalibration() {
+            const id = document.getElementById('calibrateStation').value;
+            const lat = document.getElementById('customLat').value;
+            const lng = document.getElementById('customLng').value;
+            let overrides = JSON.parse(localStorage.getItem('station_overrides') || '{}');
+
+            if (lat && lng) {
+                overrides[id] = { lat: lat, lng: lng };
+                alert(`${id} 座標已更新！重整網頁後將在地圖及邏輯生效。`);
+            } else {
+                delete overrides[id];
+                alert(`${id} 已恢復預設初始座標。`);
+            }
+            localStorage.setItem('station_overrides', JSON.stringify(overrides));
+            location.reload();
+        }
+
+        // 儲存注意點 (需求2)
+        function saveNotice() {
+            const stationId = document.getElementById('noticeStation').value;
+            const direction = document.querySelector('input[name="noticeDir"]:checked').value;
+            const text = document.getElementById('noticeText').value;
+            const imgFile = document.getElementById('noticeImg').files[0];
+
+            if (!text) return alert("請輸入注意點說明文字！");
+
+            let notices = JSON.parse(localStorage.getItem('track_notices') || '[]');
+
+            const newNotice = {
+                id: Date.now(),
+                stationId: stationId,
+                direction: direction,
+                text: text,
+                image: ""
+            };
+
+            if (imgFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    newNotice.image = e.target.result; // 圖片轉換為 Base64 儲存
+                    notices.push(newNotice);
+                    localStorage.setItem('track_notices', JSON.stringify(notices));
+                    alert("注意點（含圖片）新增成功！");
+                    resetNoticeForm();
+                    renderActiveNotices();
+                };
+                reader.readAsDataURL(imgFile);
+            } else {
+                notices.push(newNotice);
+                localStorage.setItem('track_notices', JSON.stringify(notices));
+                alert("注意點新增成功！");
+                resetNoticeForm();
+                renderActiveNotices();
+            }
+        }
+
+        function resetNoticeForm() {
+            document.getElementById('noticeText').value = '';
+            document.getElementById('noticeImg').value = '';
+        }
+
+        // 手動更換運行方向
+        function handleDirectionChange() {
+            currentStationIndex = null; // 重置鎖定狀態，重新依據新方向判定
+            document.getElementById('currentStationTxt').innerText = "重新計算中...";
+            document.getElementById('nextStationTxt').innerText = "重新計算中...";
+            renderActiveNotices();
+        }
+
+        // 開啟核心 GPS 即時追蹤
+        function startGpsTracking() {
+            if (!navigator.geolocation) {
+                document.getElementById('gpsStatus').innerText = "錯誤：您的瀏覽器不支援 GPS 定位。";
+                return;
+            }
+
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    const uLat = position.coords.latitude;
+                    const uLng = position.coords.longitude;
+                    
+                    document.getElementById('gpsStatus').innerText = `接收正常 (誤差範圍: ${Math.round(position.coords.accuracy)}公尺)`;
+                    
+                    // 更新地圖標記
+                    userMarker.setLatLng([uLat, uLng]);
+                    
+                    processLocationLogic(uLat, uLng);
+                },
+                (error) => {
+                    document.getElementById('gpsStatus').innerText = `GPS 錯誤: ${error.message}。請確認開啟定位權限。`;
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+            );
+        }
+
+        // 地球大圓距離計算 (Haversine 公式)
+        function calcDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // 公尺
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; 
+        }
+
+        // 核心動態顯示邏輯 (需求3)
+        function processLocationLogic(uLat, uLng) {
+            const direction = document.getElementById('directionSelect').value;
+            
+            let absoluteClosestIdx = 0;
+            let minDistance = Infinity;
+
+            // 1. 算出離使用者絕對最近的車站與距離
+            BASE_STATIONS.forEach((st, idx) => {
+                let actual = getActiveCoords(st.id);
+                let dist = calcDistance(uLat, uLng, actual.lat, actual.lng);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    absoluteClosestIdx = idx;
+                }
+            });
+
+            // 2. 初始狀態，直接將絕對最近站設為起點
+            if (currentStationIndex === null) {
+                currentStationIndex = absoluteClosestIdx;
+            } else {
+                // 3. 判斷是否有「抵達下一個車站」 (進入下一站 150公尺內)
+                let nextIdx = (direction === 'up') ? currentStationIndex + 1 : currentStationIndex - 1;
+                
+                // 確認下一站是否有效（未到終點站）
+                if (nextIdx >= 0 && nextIdx < BASE_STATIONS.length) {
+                    let nextStationCoords = getActiveCoords(BASE_STATIONS[nextIdx].id);
+                    let distToNext = calcDistance(uLat, uLng, nextStationCoords.lat, nextStationCoords.lng);
+                    
+                    // 抵達下一個車站範圍，更新鎖定起點
+                    if (distToNext <= 150) {
+                        currentStationIndex = nextIdx;
+                    }
+                } else {
+                    // 如果已經到了端點站，且距離最近的不再是鎖定站，才容許重設
+                    if (absoluteClosestIdx !== currentStationIndex && minDistance <= 150) {
+                        currentStationIndex = absoluteClosestIdx;
+                    }
+                }
+            }
+
+            // 更新 UI 介面面板文字
+            const curSt = BASE_STATIONS[currentStationIndex];
+            let nextStIdx = (direction === 'up') ? currentStationIndex + 1 : currentStationIndex - 1;
+            let nextSt = BASE_STATIONS[nextStIdx];
+
+            document.getElementById('currentStationTxt').innerText = `${curSt.id} ${curSt.name}`;
+            if (nextSt) {
+                document.getElementById('nextStationTxt').innerText = `${nextSt.id} ${nextSt.name}`;
+                document.getElementById('intervalLabel').innerText = `${curSt.name} → ${nextSt.name}`;
+            } else {
+                document.getElementById('nextStationTxt').innerText = "已抵達終點站";
+                document.getElementById('intervalLabel').innerText = `${curSt.name} (終點)`;
+            }
+
+            // 4. 動態重新渲染該路段符合方向與站點的注意點
+            renderActiveNotices();
+        }
+
+        // 渲染目前區間對應的注意點
+        function renderActiveNotices() {
+            const container = document.getElementById('activeNoticeContainer');
+            container.innerHTML = ''; // 清空舊畫面
+
+            if (currentStationIndex === null) {
+                container.innerHTML = '<p class="text-sm text-gray-400 italic">定位計算中...</p>';
+                return;
+            }
+
+            const direction = document.getElementById('directionSelect').value;
+            const currentStationId = BASE_STATIONS[currentStationIndex].id;
+            const allNotices = JSON.parse(localStorage.getItem('track_notices') || '[]');
+
+            // 過濾出符合「當前車站」且「方向正確」的注意點
+            const filtered = allNotices.filter(n => n.stationId === currentStationId && n.direction === direction);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400 italic">此區間目前沒有標示注意點。</p>';
+                return;
+            }
+
+            // 輸出圖文組件
+            filtered.forEach(n => {
+                const item = document.createElement('div');
+                item.className = "bg-amber-50 p-3 rounded border border-amber-200 space-y-2 relative";
+                
+                let imgHtml = '';
+                if (n.image) {
+                    imgHtml = `<img src="${n.image}" class="w-full h-auto rounded border border-gray-200 mt-1 max-h-60 object-cover" alt="現場圖">`;
+                }
+
+                item.innerHTML = `
+                    <p class="text-sm text-gray-800 font-medium">${n.text}</p>
+                    ${imgHtml}
+                    <button onclick="deleteNotice(${n.id})" class="absolute top-1 right-2 text-xs text-red-500 hover:underline">刪除</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // 提供刪除注意點功能
+        function deleteNotice(id) {
+            if(!confirm("確定要刪除此注意點嗎？")) return;
+            let notices = JSON.parse(localStorage.getItem('track_notices') || '[]');
+            notices = notices.filter(n => n.id !== id);
+            localStorage.setItem('track_notices', JSON.stringify(notices));
+            renderActiveNotices();
+        }
+    </script>
+</body>
+</html>
