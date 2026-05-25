@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文湖線路段注意點動態提示系統</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -37,7 +37,7 @@
                     <span id="nextStationTxt" class="font-bold text-base text-gray-700">偵測中...</span>
                 </div>
             </div>
-            <p id="gpsStatus" class="text-xs text-blue-600 mt-2">正在讀取 GPS 訊號...</p>
+            <p id="gpsStatus" class="text-xs text-blue-600 mt-2">正在初始化定位系統...</p>
         </section>
 
         <section class="bg-white p-4 rounded-xl shadow">
@@ -58,12 +58,12 @@
         <hr class="border-gray-300 my-6">
 
         <section class="bg-white p-4 rounded-xl shadow">
-            <div class="flex justify-between items-center cursor-pointer select-none" onclick="toggleSection('noticeFormContent', 'noticeArrow')">
+            <div class="flex justify-between items-center cursor-pointer select-none py-1" onclick="toggleSection('noticeFormContent', 'noticeArrow')">
                 <h2 class="text-lg font-bold text-gray-800">➕ 新增區間注意點</h2>
                 <span id="noticeArrow" class="text-gray-400 font-bold transition-transform duration-200">▶</span>
             </div>
             
-            <div id="noticeFormContent" class="hidden space-y-3 text-sm mt-4 border-t border-gray-100 pt-3">
+            <div id="noticeFormContent" style="display: none;" class="space-y-3 text-sm mt-4 border-t border-gray-100 pt-3">
                 <div>
                     <label class="block text-gray-600 font-medium mb-1">選擇起點車站</label>
                     <select id="noticeStation" class="w-full p-2 border rounded bg-gray-50"></select>
@@ -88,12 +88,12 @@
         </section>
 
         <section class="bg-white p-4 rounded-xl shadow">
-            <div class="flex justify-between items-center cursor-pointer select-none" onclick="toggleSection('calibrateFormContent', 'calibrateArrow')">
+            <div class="flex justify-between items-center cursor-pointer select-none py-1" onclick="toggleSection('calibrateFormContent', 'calibrateArrow')">
                 <h2 class="text-lg font-bold text-gray-800">⚙️ 車站 GPS 座標微調補救</h2>
                 <span id="calibrateArrow" class="text-gray-400 font-bold transition-transform duration-200">▶</span>
             </div>
 
-            <div id="calibrateFormContent" class="hidden space-y-3 text-sm mt-4 border-t border-gray-100 pt-3">
+            <div id="calibrateFormContent" style="display: none;" class="space-y-3 text-sm mt-4 border-t border-gray-100 pt-3">
                 <div>
                     <label class="block text-gray-600 font-medium mb-1">選擇欲校正車站</label>
                     <select id="calibrateStation" class="w-full p-2 border rounded bg-gray-50" onchange="loadCalibrateField()"></select>
@@ -115,7 +115,9 @@
     </main>
 
     <script>
-        // 24站文湖線正確初始資料
+        // 觸發定位距離常數：改為 50 公尺
+        const TRIGGER_DISTANCE = 50; 
+
         const BASE_STATIONS = [
             { id: "BR01", name: "動物園", lat: 24.9982, lng: 121.5793 },
             { id: "BR02", name: "木柵", lat: 24.9987, lng: 121.5731 },
@@ -147,21 +149,22 @@
         let currentStationIndex = null;
 
         window.onload = function() {
-            initUI();
-            initMap();
-            startGpsTracking();
+            // 防禦性載入：確保任何一個壞掉都不會阻礙定位授權彈出
+            try { initUI(); } catch(e) { console.error("UI初始化失敗:", e); }
+            try { initMap(); } catch(e) { console.error("地圖初始化失敗:", e); }
+            try { startGpsTracking(); } catch(e) { console.error("GPS啟動失敗:", e); }
         };
 
-        // 功能 1 實現：點擊標題切換收折狀態
+        // 修正後的 100% 成功折疊函式
         function toggleSection(contentId, arrowId) {
             const content = document.getElementById(contentId);
             const arrow = document.getElementById(arrowId);
             
-            if (content.classList.contains('hidden')) {
-                content.classList.remove('hidden');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
                 arrow.innerText = '▼';
             } else {
-                content.classList.add('hidden');
+                content.style.display = 'none';
                 arrow.innerText = '▶';
             }
         }
@@ -179,16 +182,11 @@
             loadCalibrateField();
         }
 
-        // 功能 2 實現：初始化鎖定版地圖 (停用所有使用者移動與縮放手勢)
         function initMap() {
             map = L.map('map', {
-                dragging: false,         // 禁用滑動/拖拽
-                touchZoom: false,        // 禁用雙指縮放
-                scrollWheelZoom: false,  // 禁用滾輪縮放
-                doubleClickZoom: false,  // 禁用雙擊縮放
-                boxZoom: false,          // 禁用方框縮放
-                zoomControl: false       // 隱藏左上角的放大縮小按鈕
-            }).setView([25.0450, 121.5750], 12); // 微調中心點與縮放比，讓全線完美置中
+                dragging: false, touchZoom: false, scrollWheelZoom: false,
+                doubleClickZoom: false, boxZoom: false, zoomControl: false
+            }).setView([25.0450, 121.5750], 12);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
@@ -203,15 +201,11 @@
             BASE_STATIONS.forEach(st => {
                 let actual = getActiveCoords(st.id);
                 L.circleMarker([actual.lat, actual.lng], {
-                    radius: 5,
-                    color: '#965C1F',
-                    fillColor: '#FFF',
-                    fillOpacity: 1,
-                    weight: 2
+                    radius: 5, color: '#965C1F', fillColor: '#FFF', fillOpacity: 1, weight: 2
                 }).addTo(map).bindPopup(`${st.id} ${st.name}`);
             });
 
-            userMarker = L.marker([0, 0]).addTo(map).bindPopup("您的目前位置");
+            userMarker = L.marker([25.0450, 121.5750]).addTo(map).bindPopup("您的目前位置");
         }
 
         function getActiveCoords(stationId) {
@@ -263,11 +257,7 @@
             let notices = JSON.parse(localStorage.getItem('track_notices') || '[]');
 
             const newNotice = {
-                id: Date.now(),
-                stationId: stationId,
-                direction: direction,
-                text: text,
-                image: ""
+                id: Date.now(), stationId: stationId, direction: direction, text: text, image: ""
             };
 
             if (imgFile) {
@@ -304,9 +294,12 @@
 
         function startGpsTracking() {
             if (!navigator.geolocation) {
-                document.getElementById('gpsStatus').innerText = "錯誤：您的瀏覽器不支援 GPS 定位。";
+                document.getElementById('gpsStatus').innerText = "錯誤：您的瀏覽器或設備不支援 GPS 定位功能。";
                 return;
             }
+
+            // 明確更改狀態提示，告知使用者正在徵求授權
+            document.getElementById('gpsStatus').innerText = "正在向瀏覽器請求 GPS 定位授權...";
 
             navigator.geolocation.watchPosition(
                 (position) => {
@@ -318,9 +311,23 @@
                     processLocationLogic(uLat, uLng);
                 },
                 (error) => {
-                    document.getElementById('gpsStatus').innerText = `GPS 錯誤: ${error.message}。請確認開啟定位權限。`;
+                    let errorMsg = "";
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg = "您拒絕了位置授權，請到手機瀏覽器設定中重新允許此網址的定位權限。";
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg = "位置資訊不可用（GPS 訊號弱或無網際網路連接）。";
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg = "取得位置逾時。";
+                            break;
+                        default:
+                            errorMsg = error.message;
+                    }
+                    document.getElementById('gpsStatus').innerText = `GPS 錯誤: ${errorMsg}`;
                 },
-                { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
             );
         }
 
@@ -360,11 +367,12 @@
                     let nextStationCoords = getActiveCoords(BASE_STATIONS[nextIdx].id);
                     let distToNext = calcDistance(uLat, uLng, nextStationCoords.lat, nextStationCoords.lng);
                     
-                    if (distToNext <= 150) {
+                    // 已修改：進入下一站 50 公尺內才切換
+                    if (distToNext <= TRIGGER_DISTANCE) {
                         currentStationIndex = nextIdx;
                     }
                 } else {
-                    if (absoluteClosestIdx !== currentStationIndex && minDistance <= 150) {
+                    if (absoluteClosestIdx !== currentStationIndex && minDistance <= TRIGGER_DISTANCE) {
                         currentStationIndex = absoluteClosestIdx;
                     }
                 }
@@ -426,4 +434,11 @@
 
         function deleteNotice(id) {
             if(!confirm("確定要刪除此注意點嗎？")) return;
-            let notices = JSON.parse(localSt
+            let notices = JSON.parse(localStorage.getItem('track_notices') || '[]');
+            notices = notices.filter(n => n.id !== id);
+            localStorage.setItem('track_notices', JSON.stringify(notices));
+            renderActiveNotices();
+        }
+    </script>
+</body>
+</html>
