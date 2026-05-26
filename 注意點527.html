@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線路段注意點動態提示系統 (自動除錯版)</title>
+    <title>文湖線路段注意點動態提示系統 (圖片除錯版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -15,7 +15,7 @@
 
     <script>
         // 🚀 【核心設定】請在下方單引號內，貼上您從 Google 試算表發布取得的 TSV 網址：
-        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
+        const GOOGLE_SHEET_URL = '請在引號內貼上您的TSV網址';
     </script>
 
     <header class="bg-amber-800 text-white p-4 sticky top-0 z-50 shadow-md">
@@ -374,7 +374,7 @@
             renderActiveNotices();
         }
 
-        // 🛠️ 核心修正：加入網址「自動糾察與轉換」功能
+        // 🛠️ 升級：改用全新高穩定度通道 + 錯誤提示回報功能
         function renderActiveNotices() {
             const container = document.getElementById('activeNoticeContainer');
             
@@ -404,17 +404,32 @@
                 const item = document.createElement('div');
                 item.className = "bg-amber-50 p-3 rounded border border-amber-200 space-y-2 relative shadow-sm";
                 
-                // 🪄 魔法核心：偵測到 Google Drive 網頁網址，自動轉換為純圖片檔案流網址
                 let finalImgUrl = n.image ? n.image.trim() : '';
+                let cleanId = n.id.replace(/[^a-zA-Z0-9]/g, '');
+
                 if (finalImgUrl.includes('drive.google.com')) {
                     const match = finalImgUrl.match(/\/d\/([^/]+)/);
                     if (match && match[1]) {
-                        finalImgUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                        // ✨ 換用全新、更適合行動端 HTML 渲染的全球 CDN 圖片流網址
+                        finalImgUrl = `https://lh3.googleusercontent.com/d/${match[1]}`;
                     }
                 }
 
-                // 加入 onerror 處理機制：如果網址真的貼錯了（例如 pngtree 網頁網址），會自動優雅隱藏，不出現破圖圖標
-                let imgHtml = finalImgUrl ? `<img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 mt-1 max-h-60 object-cover" alt="現場圖" onerror="this.style.display='none';">` : '';
+                // 🚨 核心改進：不直接隱藏破圖，而是顯示紅字提示，協助您一眼看出是哪個環節出錯
+                let imgHtml = '';
+                if (finalImgUrl) {
+                    imgHtml = `
+                        <div class="mt-1">
+                            <img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 max-h-60 object-cover" alt="現場圖" 
+                                 onerror="this.style.display='none'; document.getElementById('err-${cleanId}').style.display='block';">
+                            <div id="err-${cleanId}" class="hidden p-2 bg-red-50 border border-red-200 text-xs text-red-600 rounded mt-1">
+                                ❌ <b>圖片載入失敗！請檢查：</b><br>
+                                1. 該雲端硬碟檔案，是否忘記點擊「分享」並將權限改為<b>「知道連結的任何人」</b>？<br>
+                                2. 或者您貼到了「網頁網址」而非「圖片/檔案網址」。
+                            </div>
+                        </div>
+                    `;
+                }
                 
                 item.innerHTML = `
                     <p class="text-sm text-gray-800 font-medium">${n.text}</p>
