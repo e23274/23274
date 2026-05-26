@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線路段注意點動態提示系統 (穩定同步版)</title>
+    <title>文湖線路段注意點動態提示系統 (自動除錯版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -15,7 +15,7 @@
 
     <script>
         // 🚀 【核心設定】請在下方單引號內，貼上您從 Google 試算表發布取得的 TSV 網址：
-        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
+        const GOOGLE_SHEET_URL = '請在引號內貼上您的TSV網址';
     </script>
 
     <header class="bg-amber-800 text-white p-4 sticky top-0 z-50 shadow-md">
@@ -198,7 +198,6 @@
             }
 
             try {
-                // 自動判斷網址原本是否包含問號，以正確串接時間戳防止舊快取
                 const separator = GOOGLE_SHEET_URL.includes('?') ? '&' : '?';
                 const finalUrl = `${GOOGLE_SHEET_URL}${separator}_cb=${Date.now()}`;
                 
@@ -283,14 +282,12 @@
             renderActiveNotices();
         }
 
-        // 🛠️ 優化後的 GPS 啟動功能：放寬鎖定限制，提供更穩定的連接
         function startGpsTracking() {
             if (!navigator.geolocation) {
                 document.getElementById('gpsStatus').innerText = "❌ 錯誤：您的瀏覽器或設備不支援 GPS 定位。";
                 return;
             }
 
-            // 移除嚴格的超時限制，允許使用 30 秒內的緩存位置以加快初始化
             const gpsOptions = {
                 enableHighAccuracy: true,
                 maximumAge: 30000 
@@ -316,7 +313,6 @@
                         errorMsg = "⚠️ 定位超時，正在努力重新鎖定衛星中...";
                     }
                     document.getElementById('gpsStatus').innerHTML = `<span class="text-red-500">${errorMsg}</span>`;
-                    console.warn("GPS 狀態:", error.message);
                 },
                 gpsOptions
             );
@@ -378,14 +374,12 @@
             renderActiveNotices();
         }
 
+        // 🛠️ 核心修正：加入網址「自動糾察與轉換」功能
         function renderActiveNotices() {
             const container = document.getElementById('activeNoticeContainer');
             
-            // 如果雲端資料還沒完全抓下來，先顯示加載提示
             if (globalNotices.length === 0) {
-                if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes('請在引號內貼上')) {
-                    return;
-                }
+                if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes('請在引號內貼上')) return;
                 container.innerHTML = '<p class="text-sm text-gray-400 italic">正在連線雲端資料庫...</p>';
                 return;
             }
@@ -409,7 +403,19 @@
             filtered.forEach(n => {
                 const item = document.createElement('div');
                 item.className = "bg-amber-50 p-3 rounded border border-amber-200 space-y-2 relative shadow-sm";
-                let imgHtml = n.image ? `<img src="${n.image}" class="w-full h-auto rounded border border-gray-200 mt-1 max-h-60 object-cover" alt="現場圖">` : '';
+                
+                // 🪄 魔法核心：偵測到 Google Drive 網頁網址，自動轉換為純圖片檔案流網址
+                let finalImgUrl = n.image ? n.image.trim() : '';
+                if (finalImgUrl.includes('drive.google.com')) {
+                    const match = finalImgUrl.match(/\/d\/([^/]+)/);
+                    if (match && match[1]) {
+                        finalImgUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                    }
+                }
+
+                // 加入 onerror 處理機制：如果網址真的貼錯了（例如 pngtree 網頁網址），會自動優雅隱藏，不出現破圖圖標
+                let imgHtml = finalImgUrl ? `<img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 mt-1 max-h-60 object-cover" alt="現場圖" onerror="this.style.display='none';">` : '';
+                
                 item.innerHTML = `
                     <p class="text-sm text-gray-800 font-medium">${n.text}</p>
                     ${imgHtml}
