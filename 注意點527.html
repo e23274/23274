@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線路段注意點動態提示系統 (雲端同步版)</title>
+    <title>文湖線路段注意點動態提示系統 (穩定同步版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -55,7 +55,7 @@
                     <span id="nextStationTxt" class="font-bold text-base text-gray-700">偵測中...</span>
                 </div>
             </div>
-            <p id="gpsStatus" class="text-xs text-blue-600 mt-2">正在初始化定位系統...</p>
+            <p id="gpsStatus" class="text-xs text-blue-600 mt-2 font-medium">正在初始化定位系統...</p>
         </section>
 
         <section class="bg-white p-4 rounded-xl shadow">
@@ -134,7 +134,7 @@
 
         let map, userMarker;
         let currentStationIndex = null;
-        let globalNotices = []; // 用來存放從雲端抓下來的注意點
+        let globalNotices = []; 
 
         window.onload = function() {
             try { initUI(); } catch(e) { console.error("UI初始化失敗:", e); }
@@ -190,28 +190,28 @@
             userMarker = L.marker([25.0450, 121.5750]).addTo(map).bindPopup("您的目前位置");
         }
 
-        // 核心非同步功能：抓取 Google 試算表 TSV 資料並解析
         async function loadSheetData() {
             if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes('請在引號內貼上')) {
                 document.getElementById('activeNoticeContainer').innerHTML = 
-                    '<p class="text-sm text-red-500 italic font-bold">⚠️ 請先在程式碼中設定您的 Google 試算表 TSV 網址！</p>';
+                    '<p class="text-sm text-amber-600 italic font-bold">⚠️ 請先在程式碼中設定您的 Google 試算表 TSV 網址！</p>';
                 return;
             }
 
             try {
-                // 加個時間戳防止瀏覽器快取舊資料
-                const cacheBuster = `&_cb=${Date.now()}`;
-                const response = await fetch(GOOGLE_SHEET_URL + cacheBuster);
+                // 自動判斷網址原本是否包含問號，以正確串接時間戳防止舊快取
+                const separator = GOOGLE_SHEET_URL.includes('?') ? '&' : '?';
+                const finalUrl = `${GOOGLE_SHEET_URL}${separator}_cb=${Date.now()}`;
+                
+                const response = await fetch(finalUrl);
                 const text = await response.text();
                 
                 const lines = text.split(/\r?\n/);
                 const parsedNotices = [];
 
-                // 從第二行開始解析（跳過標題列）
                 for (let i = 1; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
                     
-                    const cols = lines[i].split('\t'); // 用 Tab 切割欄位
+                    const cols = lines[i].split('\t'); 
                     if (cols.length >= 4) {
                         parsedNotices.push({
                             id: cols[0] ? cols[0].trim() : String(Date.now() + i),
@@ -234,7 +234,6 @@
         }
 
         function getFilteredNotices() {
-            // 提供現場臨時隱藏功能：過濾掉在手機上臨時按刪除的項目
             const localDeleted = JSON.parse(localStorage.getItem('deleted_sheet_notices') || '[]');
             return globalNotices.filter(n => !localDeleted.includes(String(n.id)));
         }
@@ -284,21 +283,42 @@
             renderActiveNotices();
         }
 
+        // 🛠️ 優化後的 GPS 啟動功能：放寬鎖定限制，提供更穩定的連接
         function startGpsTracking() {
             if (!navigator.geolocation) {
-                document.getElementById('gpsStatus').innerText = "錯誤：您的瀏覽器不支援 GPS。";
+                document.getElementById('gpsStatus').innerText = "❌ 錯誤：您的瀏覽器或設備不支援 GPS 定位。";
                 return;
             }
+
+            // 移除嚴格的超時限制，允許使用 30 秒內的緩存位置以加快初始化
+            const gpsOptions = {
+                enableHighAccuracy: true,
+                maximumAge: 30000 
+            };
+
             navigator.geolocation.watchPosition(
                 (position) => {
                     const uLat = position.coords.latitude;
                     const uLng = position.coords.longitude;
-                    document.getElementById('gpsStatus').innerText = `📡 訊號正常 (誤差: ${Math.round(position.coords.accuracy)}米)`;
-                    userMarker.setLatLng([uLat, uLng]);
+                    document.getElementById('gpsStatus').innerHTML = `<span class="text-green-600">📡 訊號正常 (誤差: ${Math.round(position.coords.accuracy)}米)</span>`;
+                    if (userMarker) {
+                        userMarker.setLatLng([uLat, uLng]);
+                    }
                     processLocationLogic(uLat, uLng);
                 },
-                (error) => { document.getElementById('gpsStatus').innerText = `⚠️ GPS 定位中或訊號微弱...`; },
-                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+                (error) => {
+                    let errorMsg = "⚠️ GPS 定位中或訊號微弱...";
+                    if (error.code === 1) {
+                        errorMsg = "❌ 權限遭拒：請允許瀏覽器存取您的「位置資訊」權限。";
+                    } else if (error.code === 2) {
+                        errorMsg = "⚠️ 位置無法取得：請確認手機已開啟 GPS 定位開關。";
+                    } else if (error.code === 3) {
+                        errorMsg = "⚠️ 定位超時，正在努力重新鎖定衛星中...";
+                    }
+                    document.getElementById('gpsStatus').innerHTML = `<span class="text-red-500">${errorMsg}</span>`;
+                    console.warn("GPS 狀態:", error.message);
+                },
+                gpsOptions
             );
         }
 
@@ -360,9 +380,16 @@
 
         function renderActiveNotices() {
             const container = document.getElementById('activeNoticeContainer');
-            if (globalNotices.length === 0) return; // 尚未加載完畢則跳出
             
-            container.innerHTML = '';
+            // 如果雲端資料還沒完全抓下來，先顯示加載提示
+            if (globalNotices.length === 0) {
+                if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes('請在引號內貼上')) {
+                    return;
+                }
+                container.innerHTML = '<p class="text-sm text-gray-400 italic">正在連線雲端資料庫...</p>';
+                return;
+            }
+            
             if (currentStationIndex === null) {
                 container.innerHTML = '<p class="text-sm text-gray-400 italic">定位計算中...</p>';
                 return;
@@ -378,9 +405,10 @@
                 return;
             }
 
+            container.innerHTML = '';
             filtered.forEach(n => {
                 const item = document.createElement('div');
-                item.className = "bg-amber-50 p-3 rounded border border-amber-200 space-y-2 relative";
+                item.className = "bg-amber-50 p-3 rounded border border-amber-200 space-y-2 relative shadow-sm";
                 let imgHtml = n.image ? `<img src="${n.image}" class="w-full h-auto rounded border border-gray-200 mt-1 max-h-60 object-cover" alt="現場圖">` : '';
                 item.innerHTML = `
                     <p class="text-sm text-gray-800 font-medium">${n.text}</p>
@@ -420,7 +448,6 @@
             });
         }
 
-        // 手機臨時隱藏功能（不會影響雲端真實資料，只影響這台手機目前的畫面）
         function deleteNotice(id) {
             if(!confirm("要在本機畫面上隱藏此注意點嗎？\n(注意：此操作不會刪除雲端真實檔案)")) return;
             let localDeleted = JSON.parse(localStorage.getItem('deleted_sheet_notices') || '[]');
