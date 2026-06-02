@@ -293,7 +293,8 @@
 
             const gpsOptions = {
                 enableHighAccuracy: true,
-                maximumAge: 30000 
+                maximumAge: 0,
+                timeout: 10000
             };
 
             navigator.geolocation.watchPosition(
