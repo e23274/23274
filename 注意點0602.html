@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線路段注意點動態提示系統 (自動補零防呆+防休眠常亮版)</title>
+    <title>文湖線路段注意點動態提示系統 (圖片除錯+防休眠常亮版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -215,14 +215,9 @@
                     
                     const cols = lines[i].split('\t'); 
                     if (cols.length >= 4) {
-                        let rawStationId = cols[1] ? cols[1].trim().toUpperCase() : '';
-                        if (/^BR\d$/.test(rawStationId)) {
-                            rawStationId = rawStationId.replace('BR', 'BR0'); 
-                        }
-
                         parsedNotices.push({
                             id: cols[0] ? cols[0].trim() : String(Date.now() + i),
-                            stationId: rawStationId,
+                            stationId: cols[1] ? cols[1].trim().toUpperCase() : '',
                             direction: cols[2] ? cols[2].trim().toLowerCase() : 'up',
                             text: cols[3] ? cols[3].trim() : '',
                             image: cols[4] ? cols[4].trim() : ''
@@ -414,11 +409,10 @@
                 let finalImgUrl = n.image ? n.image.trim() : '';
                 let cleanId = n.id.replace(/[^a-zA-Z0-9]/g, '');
 
-                // 🛠️ 補齊被系統截斷的圖片轉換與渲染邏輯
                 if (finalImgUrl.includes('drive.google.com')) {
                     const match = finalImgUrl.match(/\/d\/([^/]+)/);
                     if (match && match[1]) {
-                        finalImgUrl = `https://drive.google.com/uc?id=${match[1]}`;
+                        finalImgUrl = `https://lh3.googleusercontent.com/d/${match[1]}`;
                     }
                 }
 
@@ -426,7 +420,13 @@
                 if (finalImgUrl) {
                     imgHtml = `
                         <div class="mt-1">
-                            <img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 max-h-60 object-cover" alt="現場圖">
+                            <img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 max-h-60 object-cover" alt="現場圖" 
+                                 onerror="this.style.display='none'; document.getElementById('err-${cleanId}').style.display='block';">
+                            <div id="err-${cleanId}" class="hidden p-2 bg-red-50 border border-red-200 text-xs text-red-600 rounded mt-1">
+                                ❌ <b>圖片載入失敗！請檢查：</b><br>
+                                1. 該雲端硬碟檔案，是否忘記點擊「分享」並將權限改為<b>「知道連結的任何人」</b>？<br>
+                                2. 或者您貼到了「網頁網址」而非「圖片/檔案網址」。
+                            </div>
                         </div>
                     `;
                 }
@@ -440,7 +440,6 @@
             });
         }
 
-        // 🛠️ 補齊截斷：總清單與本地隱藏的管理功能
         function renderAllNoticesList() {
             const container = document.getElementById('allNoticesList');
             if (!container) return;
@@ -454,7 +453,7 @@
 
             activeNotices.forEach(n => {
                 const st = BASE_STATIONS.find(s => s.id === n.stationId);
-                const stName = st ? st.name : n.stationId; 
+                const stName = st ? st.name : n.stationId;
                 const dirText = n.direction === 'up' ? '上行' : '下行';
                 const hasImg = n.image ? ' 🖼️' : '';
                 const item = document.createElement('div');
