@@ -293,7 +293,7 @@
                     const uLng = position.coords.longitude;
 
                     // ⏱️ 限制 1：每 2 秒（2000毫秒）才允許處理一次
-                    if (now - lastGpsTime < 2000) {
+                    if (now - lastGpsTime < 1000) {
                         return; 
                     }
 
