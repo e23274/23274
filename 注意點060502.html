@@ -293,8 +293,8 @@
                     const uLat = position.coords.latitude;
                     const uLng = position.coords.longitude;
 
-                    // ⏱️ 限制 1：每 2 秒才允許處理一次
-                    if (now - lastGpsTime < 2000) {
+                    // ⏱️ 限制 1：每 1秒才允許處理一次
+                    if (now - lastGpsTime < 1000) {
                         return; 
                     }
 
