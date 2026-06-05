@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線注意點動態提示系統 (大誤差過濾升級版)</title>
+    <meta "viewport" content="width=device-width, initial-scale=1.0">
+    <title>文湖線注意點動態提示系統 (智慧過濾修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,7 +14,7 @@
 <body class="bg-gray-100 font-sans pb-10">
 
     <script>
-        // 🚀 【核心設定】可放雲端網址或本機相對路徑（例如 'data.tsv'），系統會自動完美相容
+        // 🚀 【核心設定】雲端資料庫網址
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
     </script>
 
@@ -102,7 +102,7 @@
     </main>
 
     <script>
-        // 🎯 1. 觸發距離依指令：由 60m 修改為 100m
+        // 🎯 1. 依指定：維持 100 公尺觸發距離
         const TRIGGER_DISTANCE = 100; 
 
         // 🗺️ 精密 GPS 座標的文湖線車站清單
@@ -138,7 +138,6 @@
         let globalNotices = []; 
         let wakeLock = null; 
 
-        // 🛡️ 效能鎖定變數
         let lastRenderedStationId = null;
         let lastRenderedDirection = null;
 
@@ -292,30 +291,33 @@
                     const now = Date.now();
                     const uLat = position.coords.latitude;
                     const uLng = position.coords.longitude;
-                    const uAcc = position.coords.accuracy; // 🔍 讀取定位精準度誤差（公尺）
+                    const uAcc = position.coords.accuracy; 
 
-                    // ⏱️ 2. 節流時間依指令：由 2 秒改成每 1 秒允許處理一次
+                    // ⏱️ 依指令：維持每 1 秒允許更新一次
                     if (now - lastGpsTime < 1000) {
                         return; 
                     }
 
-                    // 🛡️ 3. 新增核心過濾：如果定位誤差大於 100 公尺，判定為無效飄移訊號（如隧道內基地台），直接擋下
-                    if (uAcc > 100) {
-                        document.getElementById('gpsStatus').innerHTML = `<span class="text-amber-500 font-semibold">⚠️ 偵測到疑似網路/隧道偽訊號 (誤差: ${Math.round(uAcc)}米，已自動過濾不跳站)</span>`;
-                        return; 
-                    }
-
-                    // 🧭 限制：GPS 座標必須與上次不同才觸發
+                    // 🧭 限制：GPS 座標必須與上次不同才處理
                     if (uLat === lastLat && uLng === lastLng) {
                         return; 
                     }
 
+                    // 🔄 只要有新訊號，立刻先更新時間與地圖藍點（確保定位功能不死機）
                     lastGpsTime = now;
                     lastLat = uLat;
                     lastLng = uLng;
-
-                    document.getElementById('gpsStatus').innerHTML = `<span class="text-green-600">📡 訊號精確 (誤差: ${Math.round(uAcc)}米)</span>`;
                     if (userMarker) userMarker.setLatLng([uLat, uLng]);
+
+                    // 🛡️ 【智慧過濾核心優化】
+                    // 如果「已經鎖定某一車站」且「誤差大於 250 公尺」，才判定為隧道偽訊號並阻擋跳站。
+                    // 這樣既可以允許網頁剛打開時（誤差大）順利初始化，又不會誤殺行駛中稍弱的 GPS 訊號。
+                    if (uAcc > 250 && currentStationIndex !== null) {
+                        document.getElementById('gpsStatus').innerHTML = `<span class="text-amber-500 font-semibold">⚠️ 經過隧道/弱訊號區 (誤差: ${Math.round(uAcc)}米，已鎖定前一站)</span>`;
+                        return; 
+                    }
+
+                    document.getElementById('gpsStatus').innerHTML = `<span class="text-green-600">📡 定位正常 (誤差: ${Math.round(uAcc)}米)</span>`;
                     processLocationLogic(uLat, uLng);
                 },
                 (error) => {
@@ -419,4 +421,126 @@
 
                 if (finalImgUrl.includes('drive.google.com')) {
                     let fileId = '';
-                  
+                    const dMatch = finalImgUrl.match(/\/d\/([^/]+)/);
+                    const idMatch = finalImgUrl.match(/[?&]id=([^&]+)/);
+                    if (dMatch && dMatch[1]) {
+                        fileId = dMatch[1];
+                    } else if (idMatch && idMatch[1]) {
+                        fileId = idMatch[1];
+                    }
+                    if (fileId) {
+                        finalImgUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+                    }
+                }
+
+                let imgHtml = '';
+                if (finalImgUrl) {
+                    imgHtml = `
+                        <div class="mt-1">
+                            <img src="${finalImgUrl}" class="w-full h-auto rounded border border-gray-200 max-h-60 object-cover" alt="現場圖" 
+                                 onerror="this.style.display='none'; document.getElementById('err-${cleanId}').style.display='block';">
+                            <div id="err-${cleanId}" class="hidden p-2 bg-red-50 border border-red-200 text-xs text-red-600 rounded mt-1">
+                                ❌ <b>圖片載入失敗！請確認該雲端圖片已開啟「知道連結的任何人皆可檢視」分享權限。</b>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                item.innerHTML = `
+                    <p class="text-sm text-gray-800 font-medium">${n.text}</p>
+                    ${imgHtml}
+                    <button onclick="deleteNotice('${n.id}')" class="absolute top-1 right-2 text-xs text-gray-400 hover:text-red-500 font-bold">隱藏</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderAllNoticesList() {
+            const container = document.getElementById('allNoticesList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const activeNotices = getFilteredNotices();
+            if (activeNotices.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400 italic py-1">目前沒有任何注意點。</p>';
+                return;
+            }
+
+            activeNotices.forEach(n => {
+                const st = BASE_STATIONS.find(s => s.id === n.stationId);
+                const stName = st ? st.name : n.stationId;
+                const dirText = n.direction === 'up' ? '上行' : '下行';
+                const hasImg = n.image ? ' 🖼️' : '';
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center p-2.5 bg-gray-50 rounded border border-gray-200 text-xs shadow-sm";
+                item.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-3">
+                        <span class="font-bold text-amber-800">[${stName} · ${dirText}]${hasImg}</span>
+                        <p class="text-gray-600 truncate mt-0.5">${n.text}</p>
+                    </div>
+                    <button onclick="deleteNotice('${n.id}')" class="text-red-400 hover:text-red-500 font-bold shrink-0 text-xs bg-white px-2 py-1 rounded border">隱藏</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function deleteNotice(id) {
+            if(!confirm("要在本機畫面上隱藏此注意點嗎？")) return;
+            let localDeleted = JSON.parse(localStorage.getItem('deleted_sheet_notices') || '[]');
+            if (!localDeleted.includes(String(id))) {
+                localDeleted.push(String(id));
+                localStorage.setItem('deleted_sheet_notices', JSON.stringify(localDeleted));
+            }
+            lastRenderedStationId = null;
+            renderActiveNotices();
+            renderAllNoticesList();
+        }
+
+        async function requestWakeLock() {
+            if (wakeLock !== null) return;
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    const wlStatus = document.getElementById('wakeLockStatus');
+                    if (wlStatus) {
+                        wlStatus.className = "text-xs text-green-700 mt-1 font-medium bg-green-50 p-2 rounded border border-green-200";
+                        wlStatus.innerHTML = '☕ 螢幕常亮：🟢 已啟用 (手機將不會黑屏)';
+                    }
+                    wakeLock.addEventListener('release', () => {
+                        wakeLock = null;
+                        const wlStatus = document.getElementById('wakeLockStatus');
+                        if (wlStatus) {
+                            wlStatus.className = "text-xs text-amber-700 mt-1 font-medium bg-amber-50 p-2 rounded border border-amber-200";
+                            wlStatus.innerHTML = '⚠️ 螢幕常亮：已自動解除 (點擊畫面任一處可重新啟用)';
+                        }
+                    });
+                } catch (err) {
+                    const wlStatus = document.getElementById('wakeLockStatus');
+                    if (wlStatus) {
+                        wlStatus.className = "text-xs text-red-600 mt-1 font-medium bg-red-50 p-2 rounded border border-red-200";
+                        wlStatus.innerHTML = `⚠️ 螢幕常亮失敗：請關閉「低電量模式」並點擊畫面重試。`;
+                    }
+                    wakeLock = null;
+                }
+            }
+        }
+
+        document.addEventListener('click', () => { requestWakeLock(); });
+
+        function handleDirectionChange() {
+            currentStationIndex = null;
+            document.getElementById('currentStationTxt').innerText = "重新計算中...";
+            document.getElementById('nextStationTxt').innerText = "重新計算中...";
+            lastRenderedStationId = null;
+            renderActiveNotices();
+            requestWakeLock(); 
+        }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+    </script>
+</body>
+</html>
