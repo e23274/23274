@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文湖線注意點動態提示系統 (視窗滿版修正版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>文湖線注意點動態提示系統 (終極滿版修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -18,12 +18,12 @@
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
     </script>
 
-    <header class="bg-amber-800 text-white p-4 sticky top-0 z-50 shadow-md">
-        <div class="max-w-md mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">文湖線注意點系統 ☁️</h1>
-            <select id="directionSelect" class="bg-amber-700 text-white p-2 rounded border border-amber-600 focus:outline-none" onchange="handleDirectionChange()">
-                <option value="up">上行 (動物園 → 展覽館)</option>
-                <option value="down">下行 (展覽館 → 動物園)</option>
+    <header class="bg-amber-800 text-white p-3 sticky top-0 z-50 shadow-md">
+        <div class="max-w-md mx-auto flex flex-wrap items-center justify-between gap-2">
+            <h1 class="text-lg font-bold shrink-0">文湖線注意點系統 ☁️</h1>
+            <select id="directionSelect" class="bg-amber-700 text-white text-xs p-1.5 rounded border border-amber-600 focus:outline-none max-w-[190px]" onchange="handleDirectionChange()">
+                <option value="up">上行 (動物園→展覽館)</option>
+                <option value="down">下行 (展覽館→動物園)</option>
             </select>
         </div>
     </header>
@@ -141,7 +141,6 @@
         let lastRenderedStationId = null;
         let lastRenderedDirection = null;
 
-        // ⏱️ GPS 節流與移動判定變數
         let lastGpsTime = 0;
         let lastLat = null;
         let lastLng = null;
@@ -293,24 +292,19 @@
                     const uLng = position.coords.longitude;
                     const uAcc = position.coords.accuracy; 
 
-                    // ⏱️ 依指令：維持每 1 秒允許更新一次
                     if (now - lastGpsTime < 1000) {
                         return; 
                     }
 
-                    // 🧭 限制：GPS 座標必須與上次不同才處理
                     if (uLat === lastLat && uLng === lastLng) {
                         return; 
                     }
 
-                    // 🔄 只要有新訊號，立刻先更新時間與地圖藍點（確保定位功能不死機）
                     lastGpsTime = now;
                     lastLat = uLat;
                     lastLng = uLng;
                     if (userMarker) userMarker.setLatLng([uLat, uLng]);
 
-                    // 🛡️ 【智慧過濾核心】
-                    // 如果「已經鎖定某一車站」且「誤差大於 250 公尺」，才判定為隧道偽訊號並阻擋跳站。
                     if (uAcc > 250 && currentStationIndex !== null) {
                         document.getElementById('gpsStatus').innerHTML = `<span class="text-amber-500 font-semibold">⚠️ 經過隧道/弱訊號區 (誤差: ${Math.round(uAcc)}米，已鎖定前一站)</span>`;
                         return; 
@@ -428,6 +422,7 @@
                         fileId = idMatch[1];
                     }
                     if (fileId) {
+                        // 🛠️ 修正 `${fileId}` 的變數字串拼接 bug
                         finalImgUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
                     }
                 }
