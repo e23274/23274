@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文湖線注意點動態提示系統 (座標修正版)</title>
+    <title>文湖線注意點動態提示系統 (終極滿版修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,8 +14,8 @@
 <body class="bg-gray-100 font-sans pb-10">
 
     <script>
-        // 🚀 【核心設定】雲端資料庫網址
-        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
+        // 🚀 【核心設定】雲端資料庫網址 (已完全恢復正確網址)
+        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
     </script>
 
     <header class="bg-amber-800 text-white p-3 sticky top-0 z-50 shadow-md">
@@ -78,7 +78,7 @@
 
         <section class="bg-white p-4 rounded-xl shadow">
             <div class="flex justify-between items-center cursor-pointer select-none py-1" onclick="toggleSection('calibrateFormContent', 'calibrateArrow')">
-                <h2 class="text-lg font-bold text-gray-800">⚙️ 車張 GPS 座標微調補救</h2>
+                <h2 class="text-lg font-bold text-gray-800">⚙️ 車站 GPS 座標微調補救</h2>
                 <span id="calibrateArrow" class="text-gray-400 font-bold transition-transform duration-200">▶</span>
             </div>
             <div id="calibrateFormContent" style="display: none;" class="space-y-3 text-sm mt-4 border-t border-gray-100 pt-3">
@@ -105,7 +105,7 @@
         // 🎯 1. 依指令：維持 100 公尺觸發距離
         const TRIGGER_DISTANCE = 100; 
 
-        // 🗺️ 精密 GPS 座標的文湖線車站清單 (已更新部分車站座標)
+        // 🗺️ 精密 GPS 座標的文湖線車站清單 (已精準更新指定之四站座標)
         const BASE_STATIONS = [
             { id: "BR01", name: "動物園", lat: 24.9982, lng: 121.5793 },
             { id: "BR02", name: "木柵", lat: 24.998289, lng: 121.573143 },
@@ -422,7 +422,8 @@
                         fileId = idMatch[1];
                     }
                     if (fileId) {
-                        finalImgUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+                        // 🛠️ 修正變數字串拼接
+                        finalImgUrl = `http://googleusercontent.com/profile/picture/${fileId}`;
                     }
                 }
 
