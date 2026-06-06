@@ -14,7 +14,7 @@
 <body class="bg-gray-100 font-sans pb-10">
 
     <script>
-        // 🚀 【核心設定】雲端資料庫網址 (已完全恢復正確網址)
+        // 🚀 【核心設定】雲端資料庫網址
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTNlyDn6slXNmgc-wyT7CMvbvexRsJIi5H5E4d4HOJ2k9LE9j0QRlhpVtRO9YvfSUAEHTOV3N-9u_Y9/pub?gid=0&single=true&output=tsv';
     </script>
 
@@ -422,8 +422,8 @@
                         fileId = idMatch[1];
                     }
                     if (fileId) {
-                        // 🛠️ 修正變數字串拼接
-                        finalImgUrl = `http://googleusercontent.com/profile/picture/${fileId}`;
+                        // 🛠️ 修正：改用真正能外連讀取雲端硬碟檔案的直連網址
+                        finalImgUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
                     }
                 }
 
