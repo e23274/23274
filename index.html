@@ -28,6 +28,7 @@
             width: 100%;
             max-width: 500px;
             text-align: center;
+            overflow: hidden;
         }
 
         h1 {
@@ -41,12 +42,39 @@
         #statusText {
             font-size: 14px;
             color: #aaaaaa;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             background: #222;
             padding: 6px 12px;
             border-radius: 20px;
             display: inline-block;
         }
+
+        /* --- 新增：跑馬燈區塊樣式 --- */
+        .marquee-container {
+            width: 100%;
+            overflow: hidden;
+            background-color: #111;
+            border: 1px solid #444;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none; /* 預設隱藏，有資料才顯示 */
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            padding: 8px 0;
+            color: #ff9900;
+            font-size: 16px;
+            font-weight: bold;
+            animation: marquee 12s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(500px); }
+            100% { transform: translateX(-100%); }
+        }
+        /* -------------------------- */
 
         /* 下拉選單區塊 */
         .control-group {
@@ -116,6 +144,10 @@
         <h1>列車進站倒數監控</h1>
         <div id="statusText">系統初始化中...</div>
 
+        <div class="marquee-container" id="marqueeContainer">
+            <div class="marquee-content" id="marqueeText"></div>
+        </div>
+
         <div class="control-group">
             <div class="control-item">
                 <label for="directionSelect">選擇監測方向</label>
@@ -165,6 +197,10 @@
                         document.getElementById("statusText").innerText = "雲端狀態：已同步最新車次 (語音功能就緒)";
                         document.getElementById("statusText").style.color = "#00ff00";
                         
+                        // --- 呼叫跑馬燈更新 ---
+                        updateMarquee(globalDataCache);
+                        // ---------------------
+
                         // 抓完立即更新一次畫面
                         processTrainLogic(globalDataCache); 
                     } else {
@@ -284,6 +320,27 @@
                 locationEl.innerText = "相對位置：--";
                 lastSpokenLocation = null; // 重置標記
             }
+        }
+
+        /**
+         * 新增功能：抓取 H8 儲存格 (陣列索引 [7][7]) 作為跑馬燈
+         */
+        function updateMarquee(sheetData) {
+            const marqueeContainer = document.getElementById("marqueeContainer");
+            const marqueeText = document.getElementById("marqueeText");
+            
+            // 檢查陣列長度是否包含 H8 (第8列=索引7，第8欄=索引7)
+            if (sheetData && sheetData.length > 7 && sheetData[7].length > 7) {
+                const h8Value = sheetData[7][7];
+                // 如果有值且不為空字串，則顯示跑馬燈
+                if (h8Value !== null && h8Value !== undefined && h8Value.toString().trim() !== "") {
+                    marqueeText.innerText = h8Value.toString();
+                    marqueeContainer.style.display = "block";
+                    return;
+                }
+            }
+            // 條件不符（無內容或超界）則隱藏
+            marqueeContainer.style.display = "none";
         }
 
         /**
