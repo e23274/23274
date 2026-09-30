@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>當天車輛調度看板 (精確至秒)</title>
+  <title>當天加車計算機 </title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -150,7 +150,7 @@
       background-color: #f1f5f9;
     }
 
-    /* 錨點時間：紅色粗體 */
+    /* 錨點端點時間：紅色粗體 */
     .time-anchor {
       color: #dc2626 !important;
       font-weight: bold !important;
@@ -225,7 +225,7 @@
       <label>結束：</label>
       <select id="bEnd"><option value="">--請選擇--</option></select>
       <label>發車數量：</label>
-      <input type="number" id="bCount" value="3" min="1" placeholder="台數">
+      <input type="number" id="bCount" value="" min="1" placeholder="台數">
     </div>
 
     <!-- E 欄加車 -->
@@ -236,7 +236,7 @@
       <label>結束：</label>
       <select id="eEnd"><option value="">--請選擇--</option></select>
       <label>發車數量：</label>
-      <input type="number" id="eCount" value="4" min="1" placeholder="台數 (例: 4)">
+      <input type="number" id="eCount" value="" min="1" placeholder="台數">
     </div>
 
     <button type="button" class="btn-action btn-reset" id="btnReset">清除重設</button>
@@ -276,9 +276,16 @@
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbxMkTahf3GyuECOhpIeWDrwa0H4slg6b_CDnz0qgtAKTm4FDB-PjhJShaWU0lavlDBNNA/exec";
 
-    let rawList = [];         // 存放第 9 列開始的原始資料列表
-    let bAnchorData = { int1: null, int2: null, anchors: [] };
-    let eAnchorData = { int1: null, int2: null, anchors: [] };
+    let rawList = [];
+
+    // 精準錨點設定 (O 欄索引 14, P 欄索引 15)
+    let bEarly = { start: null, end: null }; // O26, O27
+    let bLate  = { start: null, end: null }; // O34, O35
+    let eEarly = { start: null, end: null }; // P26, P27
+    let eLate  = { start: null, end: null }; // P34, P35
+
+    let bAnchors = []; // [O26, O27, O34, O35]
+    let eAnchors = []; // [P26, P27, P34, P35]
 
     function formatTo24HourTime(val) {
       if (val === null || val === undefined || val === "") return "";
@@ -331,8 +338,14 @@
       return `${hh}:${mm}:${ss}`;
     }
 
-    // 智能步長計算（含錨點 00:02:30 分階補償）
-    function generateSmartTripTimes(startStr, endStr, count, startIdx, endIdx, anchorData) {
+    function isInsideRange(idx, early, late) {
+      const inEarly = early.start !== null && early.end !== null && idx > early.start && idx < early.end;
+      const inLate  = late.start !== null && late.end !== null && idx > late.start && idx < late.end;
+      return inEarly || inLate;
+    }
+
+    // 智能步長計算（含錨點 00:02:30 階梯補償）
+    function generateSmartTripTimes(startStr, endStr, count, startIdx, endIdx, earlyRange, lateRange) {
       if (!startStr || !endStr || !count || count <= 0) return [];
       const startSec = timeToSeconds(startStr);
       const endSec = timeToSeconds(endStr);
@@ -340,16 +353,9 @@
 
       if (count === 1) return [secondsToTime(startSec)];
 
-      function isInsideAnchor(idx) {
-        if (!anchorData) return false;
-        const in1 = anchorData.int1 && idx >= anchorData.int1.start && idx <= anchorData.int1.end;
-        const in2 = anchorData.int2 && idx >= anchorData.int2.start && idx <= anchorData.int2.end;
-        return in1 || in2;
-      }
-
-      const startIn = isInsideAnchor(startIdx);
-      const endIn = isInsideAnchor(endIdx);
       const OFFSET = 150; // 00:02:30 補償秒數
+      const startIn = isInsideRange(startIdx, earlyRange, lateRange);
+      const endIn = isInsideRange(endIdx, earlyRange, lateRange);
 
       // 1. 錨點外 -> 錨點內
       if (!startIn && endIn) {
@@ -358,7 +364,7 @@
         const times = [];
         for (let i = 0; i < count; i++) {
           const curIdx = startIdx + i;
-          const curIn = isInsideAnchor(curIdx);
+          const curIn = isInsideRange(curIdx, earlyRange, lateRange);
           const t = startSec + i * step + (curIn ? OFFSET : 0);
           times.push(secondsToTime(t));
         }
@@ -372,7 +378,7 @@
         const times = [];
         for (let i = 0; i < count; i++) {
           const curIdx = startIdx + i;
-          const curIn = isInsideAnchor(curIdx);
+          const curIn = isInsideRange(curIdx, earlyRange, lateRange);
           const t = effStart + i * step - (curIn ? OFFSET : 0);
           times.push(secondsToTime(t));
         }
@@ -388,32 +394,6 @@
       return times;
     }
 
-    // 智能提取錨點與區間
-    function extractAnchors(allData, colIdx) {
-      const g1 = [];
-      const g2 = [];
-      for (let r = 20; r <= 30; r++) {
-        if (allData[r] && allData[r][colIdx] !== undefined && allData[r][colIdx] !== "") {
-          const v = parseInt(allData[r][colIdx], 10);
-          if (!isNaN(v) && !g1.includes(v)) g1.push(v);
-        }
-      }
-      for (let r = 31; r <= 45; r++) {
-        if (allData[r] && allData[r][colIdx] !== undefined && allData[r][colIdx] !== "") {
-          const v = parseInt(allData[r][colIdx], 10);
-          if (!isNaN(v) && !g2.includes(v)) g2.push(v);
-        }
-      }
-      g1.sort((a, b) => a - b);
-      g2.sort((a, b) => a - b);
-
-      return {
-        int1: g1.length >= 2 ? { start: g1[0], end: g1[1] } : null,
-        int2: g2.length >= 2 ? { start: g2[0], end: g2[1] } : null,
-        anchors: [...g1, ...g2]
-      };
-    }
-
     async function init() {
       try {
         const response = await fetch(API_URL);
@@ -425,12 +405,22 @@
 
         const allData = result.data;
 
-        // 讀取 B 欄錨點 (O 欄索引 14) 與 E 欄錨點 (P 欄索引 15)
-        bAnchorData = extractAnchors(allData, 14);
-        eAnchorData = extractAnchors(allData, 15);
+        function getCellInt(row, col) {
+          if (allData[row] && allData[row][col] !== undefined && allData[row][col] !== "") {
+            const v = parseInt(allData[row][col], 10);
+            return isNaN(v) ? null : v;
+          }
+          return null;
+        }
 
-        console.log("B 欄錨點解析結果：", bAnchorData);
-        console.log("E 欄錨點解析結果：", eAnchorData);
+        // 精準鎖定：O 欄索引 14，P 欄索引 15
+        bEarly = { start: getCellInt(25, 14), end: getCellInt(26, 14) }; // O26, O27
+        bLate  = { start: getCellInt(33, 14), end: getCellInt(34, 14) }; // O34, O35
+        eEarly = { start: getCellInt(25, 15), end: getCellInt(26, 15) }; // P26, P27
+        eLate  = { start: getCellInt(33, 15), end: getCellInt(34, 15) }; // P34, P35
+
+        bAnchors = [bEarly.start, bEarly.end, bLate.start, bLate.end].filter(v => v !== null);
+        eAnchors = [eEarly.start, eEarly.end, eLate.start, eLate.end].filter(v => v !== null);
 
         // 擷取第 9 列開始的排班資料
         const rawRows = allData.slice(8, 500);
@@ -461,14 +451,18 @@
         populateDropdown("eStart", eTimesSet);
         populateDropdown("eEnd", eTimesSet);
 
-        if (bTimesSet.has("06:00:00")) document.getElementById("bStart").value = "06:00:00";
-        if (bTimesSet.has("06:04:00")) document.getElementById("bEnd").value = "06:04:00";
-        if (eTimesSet.has("06:08:00")) document.getElementById("eStart").value = "06:08:00";
-        if (eTimesSet.has("06:14:00")) document.getElementById("eEnd").value = "06:14:00";
+        // 預設全部保持清空（尚未加車）
+        document.getElementById("bStart").value = "";
+        document.getElementById("bEnd").value = "";
+        document.getElementById("bCount").value = "";
+        document.getElementById("eStart").value = "";
+        document.getElementById("eEnd").value = "";
+        document.getElementById("eCount").value = "";
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("dataTable").style.display = "table";
 
+        // 呈現原始排班
         updateTable();
 
       } catch (e) {
@@ -487,11 +481,6 @@
       });
     }
 
-    function isInRange(origIdx, interval) {
-      if (!interval) return false;
-      return origIdx > interval.start && origIdx < interval.end;
-    }
-
     // 核心調度計算函式
     function updateTable() {
       const bStart = document.getElementById("bStart").value;
@@ -505,13 +494,13 @@
       const hasB = bStart && bEnd && bCount > 0;
       const hasE = eStart && eEnd && eCount > 0;
 
-      // 若未啟用加車，直接顯示原表
+      // 未加車時，直接呈現原表
       if (!hasB && !hasE) {
         renderRows(rawList.map((r, idx) => {
-          const isAnchorB = bAnchorData.anchors.includes(idx);
-          const isAnchorE = eAnchorData.anchors.includes(idx);
-          const inBRange = isInRange(idx, bAnchorData.int1) || isInRange(idx, bAnchorData.int2);
-          const inERange = isInRange(idx, eAnchorData.int1) || isInRange(idx, eAnchorData.int2);
+          const isAnchorB = bAnchors.includes(idx);
+          const isAnchorE = eAnchors.includes(idx);
+          const inBRange = isInsideRange(idx, bEarly, bLate);
+          const inERange = isInsideRange(idx, eEarly, eLate);
           return {
             c: r.c,
             newBTime: "",
@@ -553,13 +542,12 @@
         segEnd = eEndIdx;
       }
 
-      // 產生新時間（套用階梯補償）
       const bNewList = (hasB && bStartIdx !== -1 && bEndIdx >= bStartIdx) 
-        ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bAnchorData) 
+        ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate) 
         : [];
       
       const eNewList = (hasE && eStartIdx !== -1 && eEndIdx >= eStartIdx) 
-        ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eAnchorData) 
+        ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate) 
         : [];
 
       const bOldList = [];
@@ -585,10 +573,10 @@
       // 1. 加車區間之前
       for (let i = 0; i < segStart; i++) {
         const item = rawList[i];
-        const isAnchorB = bAnchorData.anchors.includes(i);
-        const isAnchorE = eAnchorData.anchors.includes(i);
-        const inBRange = isInRange(i, bAnchorData.int1) || isInRange(i, bAnchorData.int2);
-        const inERange = isInRange(i, eAnchorData.int1) || isInRange(i, eAnchorData.int2);
+        const isAnchorB = bAnchors.includes(i);
+        const isAnchorE = eAnchors.includes(i);
+        const inBRange = isInsideRange(i, bEarly, bLate);
+        const inERange = isInsideRange(i, eEarly, eLate);
 
         displayRows.push({
           c: item.c,
@@ -610,7 +598,7 @@
         });
       }
 
-      // 2. 加車區間（修復：精準比對錨點位置）
+      // 2. 加車區間
       for (let k = 0; k < totalAddRows; k++) {
         let c = "", d = "", g = "", f = "";
         let origIdx = -1;
@@ -642,13 +630,10 @@
           curE = rawList[segStart + k].e;
         }
 
-        // 錨點判斷：若原列為錨點，標定為紅字錨點
-        const isAnchorB = origIdx !== -1 && bAnchorData.anchors.includes(origIdx);
-        const isAnchorE = origIdx !== -1 && eAnchorData.anchors.includes(origIdx);
-
-        // 區間判斷
-        const inBRange = origIdx !== -1 && (isInRange(origIdx, bAnchorData.int1) || isInRange(origIdx, bAnchorData.int2));
-        const inERange = origIdx !== -1 && (isInRange(origIdx, eAnchorData.int1) || isInRange(origIdx, eAnchorData.int2));
+        const isAnchorB = origIdx !== -1 && bAnchors.includes(origIdx);
+        const isAnchorE = origIdx !== -1 && eAnchors.includes(origIdx);
+        const inBRange = origIdx !== -1 && isInsideRange(origIdx, bEarly, bLate);
+        const inERange = origIdx !== -1 && isInsideRange(origIdx, eEarly, eLate);
 
         displayRows.push({
           c: c,
@@ -673,10 +658,10 @@
       // 3. 加車結束後對齊接回
       for (let i = segEnd + 1; i < rawList.length; i++) {
         const item = rawList[i];
-        const isAnchorB = bAnchorData.anchors.includes(i);
-        const isAnchorE = eAnchorData.anchors.includes(i);
-        const inBRange = isInRange(i, bAnchorData.int1) || isInRange(i, bAnchorData.int2);
-        const inERange = isInRange(i, eAnchorData.int1) || isInRange(i, eAnchorData.int2);
+        const isAnchorB = bAnchors.includes(i);
+        const isAnchorE = eAnchors.includes(i);
+        const inBRange = isInsideRange(i, bEarly, bLate);
+        const inERange = isInsideRange(i, eEarly, eLate);
 
         displayRows.push({
           c: item.c,
@@ -708,27 +693,24 @@
       rows.forEach(r => {
         const tr = document.createElement("tr");
 
-        // 欄位 B 樣式判斷：紅字錨點 > 加車新時間 > 區間淺藍色
         let bClass = "";
         if (r.isAnchorB) {
-          bClass = "time-anchor"; // 錨點時間顯示紅字！
+          bClass = "time-anchor";
         } else if (r.isBModified) {
           bClass = "cell-modified-b";
         } else if (r.inBRange) {
           bClass = "cell-b-range";
         }
 
-        // 欄位 E 樣式判斷：紅字錨點 > 加車新時間 > 區間亮黃色
         let eClass = "";
         if (r.isAnchorE) {
-          eClass = "time-anchor"; // 錨點時間顯示紅字！
+          eClass = "time-anchor";
         } else if (r.isEModified) {
           eClass = "cell-modified-e";
         } else if (r.inERange) {
           eClass = "cell-e-range";
         }
 
-        // 內容組合（含位移 +1, +2 標籤）
         const bContent = r.b ? `${r.b}${r.anchorTagB ? `<span class="anchor-badge anchor-badge-b">${r.anchorTagB}</span>` : ''}` : '';
         const eContent = r.e ? `${r.e}${r.anchorTagE ? `<span class="anchor-badge anchor-badge-e">${r.anchorTagE}</span>` : ''}` : '';
 
@@ -747,15 +729,17 @@
       });
     }
 
+    // 點擊「套用加車計算」時才套用加車
     document.getElementById("btnApply").addEventListener("click", updateTable);
 
+    // 清除重設按鈕
     document.getElementById("btnReset").addEventListener("click", () => {
       document.getElementById("bStart").value = "";
       document.getElementById("bEnd").value = "";
-      document.getElementById("bCount").value = "3";
+      document.getElementById("bCount").value = "";
       document.getElementById("eStart").value = "";
       document.getElementById("eEnd").value = "";
-      document.getElementById("eCount").value = "4";
+      document.getElementById("eCount").value = "";
       updateTable();
     });
 
