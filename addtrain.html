@@ -90,9 +90,9 @@
       color: #ffffff;
     }
     .btn-upload {
-      background-color: #10b981; /* 綠色上傳按鈕 */
+      background-color: #10b981; 
       color: #ffffff;
-      margin-left: auto; /* 將按鈕推到最右邊 */
+      margin-left: auto; 
     }
     .btn-action:hover {
       opacity: 0.85;
@@ -206,9 +206,7 @@
 
   <h2>當天車輛調度看板 (精確至秒)</h2>
 
-  <!-- 上方排班加車控制面板 -->
   <div class="control-panel">
-    <!-- B 欄加車 -->
     <div class="panel-group">
       <span class="badge-b">B 欄加車</span>
       <label>起始：</label>
@@ -219,7 +217,6 @@
       <input type="number" id="bCount" value="" min="1" placeholder="台數">
     </div>
 
-    <!-- E 欄加車 -->
     <div class="panel-group">
       <span class="badge-e">E 欄加車</span>
       <label>起始：</label>
@@ -232,12 +229,9 @@
 
     <button type="button" class="btn-action btn-reset" id="btnReset">清除重設</button>
     <button type="button" class="btn-action btn-apply" id="btnApply">套用加車計算</button>
-    
-    <!-- 新增的上傳按鈕 -->
     <button type="button" class="btn-action btn-upload" id="btnUpload">上傳至試算表</button>
   </div>
 
-  <!-- 看板表格 -->
   <div id="board-container">
     <div id="loading" class="msg-box">資料載入中，請稍候...</div>
     <table id="dataTable" style="display: none;">
@@ -268,16 +262,12 @@
   </div>
 
   <script>
-    // 讀取資料的舊網址
     const API_URL = "https://script.google.com/macros/s/AKfycbxMkTahf3GyuECOhpIeWDrwa0H4slg6b_CDnz0qgtAKTm4FDB-PjhJShaWU0lavlDBNNA/exec";
-    
-    // 上傳資料的新網址 (addtrain)
     const UPLOAD_URL = "https://script.google.com/macros/s/AKfycbwYHT6YdVUr-ozWCRBn-owZgL6QL_pk0c2SJ1pYAz67E-XQAVYYUfg9DOyy4tg1AwJ5/exec";
 
     let rawList = [];
-    let currentExportData = []; // 用來隨時記住畫面上顯示的最新表格資料，準備上傳用
+    let currentExportData = []; 
 
-    // 錨點區間與端點
     let bEarly = { start: null, end: null };
     let bLate  = { start: null, end: null };
     let eEarly = { start: null, end: null };
@@ -289,7 +279,6 @@
     function formatTo24HourTime(val) {
       if (val === null || val === undefined || val === "") return "";
       let res = "";
-      
       if (typeof val === "string") {
         val = val.trim();
         if (!val || val.includes("#N/A") || val.includes("N/A")) return "";
@@ -303,11 +292,8 @@
         } else {
           try {
             const d = new Date(val);
-            if (!isNaN(d.getTime())) {
-              res = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-            } else {
-              res = val;
-            }
+            if (!isNaN(d.getTime())) res = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            else res = val;
           } catch(e) { res = val; }
         }
       } else if (typeof val === "number") {
@@ -323,15 +309,10 @@
         }
       } else {
         try {
-          if (val instanceof Date) {
-            res = `${String(val.getHours()).padStart(2, '0')}:${String(val.getMinutes()).padStart(2, '0')}:${String(val.getSeconds()).padStart(2, '0')}`;
-          } else {
-            res = String(val);
-          }
+          if (val instanceof Date) res = `${String(val.getHours()).padStart(2, '0')}:${String(val.getMinutes()).padStart(2, '0')}:${String(val.getSeconds()).padStart(2, '0')}`;
+          else res = String(val);
         } catch(e) { res = String(val); }
       }
-
-      // 強制過濾 00:00:00，保持版面乾淨
       if (res === "00:00:00") return "";
       return res;
     }
@@ -359,7 +340,6 @@
       return inEarly || inLate;
     }
 
-    // 智能步長計算（含錨點 00:02:30 階梯補償）
     function generateSmartTripTimes(startStr, endStr, count, startIdx, endIdx, earlyRange, lateRange) {
       if (!startStr || !endStr || !count || count <= 0) return [];
       const startSec = timeToSeconds(startStr);
@@ -368,7 +348,7 @@
 
       if (count === 1) return [secondsToTime(startSec)];
 
-      const OFFSET = 150; // 00:02:30 補償秒數
+      const OFFSET = 150; 
       const startIn = isInsideRange(startIdx, earlyRange, lateRange);
       const endIn = isInsideRange(endIdx, earlyRange, lateRange);
 
@@ -408,7 +388,6 @@
 
     async function init() {
       try {
-        // 從舊網址抓資料
         const response = await fetch(API_URL);
         const result = await response.json();
         if (result.status !== "success") {
@@ -417,8 +396,6 @@
         }
 
         const allData = result.data;
-
-        // 擷取第 9 列開始的排班資料
         const rawRows = allData.slice(8, 500);
         rawList = [];
 
@@ -442,7 +419,6 @@
           }
         }
 
-        // 精確讀取列號數字，並略過 #N/A 等無效值
         function getCellInt(row1Based, colLetter) {
           const r = row1Based - 1;
           const c = colLetter === 'O' ? 14 : 15;
@@ -455,7 +431,6 @@
           return null;
         }
 
-        // 直接讀取 O26, O27, O34, O35 與 P26, P27, P34, P35 的「數字」作為精準索引
         const bIdx26 = getCellInt(26, 'O');
         const bIdx27 = getCellInt(27, 'O');
         const bIdx34 = getCellInt(34, 'O');
@@ -467,9 +442,7 @@
         const eIdx35 = getCellInt(35, 'P');
 
         function makeRange(idxA, idxB) {
-          if (idxA !== null && idxB !== null) {
-            return { start: Math.min(idxA, idxB), end: Math.max(idxA, idxB) };
-          }
+          if (idxA !== null && idxB !== null) return { start: Math.min(idxA, idxB), end: Math.max(idxA, idxB) };
           return { start: null, end: null };
         }
 
@@ -486,18 +459,10 @@
         populateDropdown("eStart", eTimesSet);
         populateDropdown("eEnd", eTimesSet);
 
-        document.getElementById("bStart").value = "";
-        document.getElementById("bEnd").value = "";
-        document.getElementById("bCount").value = "";
-        document.getElementById("eStart").value = "";
-        document.getElementById("eEnd").value = "";
-        document.getElementById("eCount").value = "";
-
         document.getElementById("loading").style.display = "none";
         document.getElementById("dataTable").style.display = "table";
 
         updateTable();
-
       } catch (e) {
         document.getElementById("loading").innerText = "無法載入資料，請確認網路連線！";
       }
@@ -514,6 +479,26 @@
       });
     }
 
+    // 建立合併列：依照「B為排版主體，中間跟隨B」的邏輯
+    function createMergedRow(bItem, eItem) {
+      return {
+        c: bItem ? bItem.c : "",
+        newBTime: bItem ? bItem.oldB : "",
+        b: bItem ? bItem.time : "",
+        d: bItem ? bItem.d : "",
+        g: bItem ? bItem.g : "",
+        newETime: eItem ? eItem.oldE : "",
+        e: eItem ? eItem.time : "",
+        f: eItem ? eItem.f : "",
+        isBModified: bItem ? bItem.isModified : false,
+        isEModified: eItem ? eItem.isModified : false,
+        isAnchorB: bItem ? bItem.isAnchor : false,
+        isAnchorE: eItem ? eItem.isAnchor : false,
+        inBRange: bItem ? bItem.inRange : false,
+        inERange: eItem ? eItem.inRange : false
+      };
+    }
+
     function updateTable() {
       const bStart = document.getElementById("bStart").value;
       const bEnd = document.getElementById("bEnd").value;
@@ -526,29 +511,16 @@
       const hasB = bStart && bEnd && bCount > 0;
       const hasE = eStart && eEnd && eCount > 0;
 
+      // 如果都沒有加車，直接呈現原表
       if (!hasB && !hasE) {
-        renderRows(rawList.map((r, idx) => {
-          const isAnchorB = bAnchors.includes(idx);
-          const isAnchorE = eAnchors.includes(idx);
-          const inBRange = isInsideRange(idx, bEarly, bLate);
-          const inERange = isInsideRange(idx, eEarly, eLate);
-          return {
-            c: r.c,
-            newBTime: "",
-            b: r.b,
-            d: r.d,
-            g: r.g,
-            newETime: "",
-            e: r.e,
-            f: r.f,
-            isBModified: false,
-            isEModified: false,
-            isAnchorB: isAnchorB,
-            isAnchorE: isAnchorE,
-            inBRange: inBRange && !isAnchorB,
-            inERange: inERange && !isAnchorE
-          };
-        }));
+        renderRows(rawList.map((r, idx) => ({
+          c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
+          newETime: "", e: r.e, f: r.f,
+          isBModified: false, isEModified: false,
+          isAnchorB: bAnchors.includes(idx), isAnchorE: eAnchors.includes(idx),
+          inBRange: isInsideRange(idx, bEarly, bLate) && !bAnchors.includes(idx),
+          inERange: isInsideRange(idx, eEarly, eLate) && !eAnchors.includes(idx)
+        })));
         return;
       }
 
@@ -557,134 +529,166 @@
       const eStartIdx = hasE ? rawList.findIndex(r => r.e === eStart) : -1;
       const eEndIdx = hasE ? rawList.findIndex(r => r.e === eEnd) : -1;
 
-      let segStart = 0;
-      let segEnd = 0;
-
-      if (hasB && bStartIdx !== -1 && hasE && eStartIdx !== -1) {
-        segStart = Math.min(bStartIdx, eStartIdx);
-        segEnd = Math.max(bEndIdx, eEndIdx);
-      } else if (hasB && bStartIdx !== -1) {
-        segStart = bStartIdx;
-        segEnd = bEndIdx;
-      } else if (hasE && eStartIdx !== -1) {
-        segStart = eStartIdx;
-        segEnd = eEndIdx;
-      }
-
-      const bNewList = (hasB && bStartIdx !== -1 && bEndIdx >= bStartIdx) 
-        ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate) 
-        : [];
+      const validBStart = hasB ? bStartIdx : Infinity;
+      const validEStart = hasE ? eStartIdx : Infinity;
+      const segStart = Math.min(validBStart, validEStart);
       
-      const eNewList = (hasE && eStartIdx !== -1 && eEndIdx >= eStartIdx) 
-        ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate) 
-        : [];
+      const validBEnd = hasB ? Math.max(bEndIdx, bStartIdx + bCount - 1) : -1;
+      const validEEnd = hasE ? Math.max(eEndIdx, eStartIdx + eCount - 1) : -1;
+      const segEnd = Math.max(validBEnd, validEEnd);
 
-      const origSegCount = segEnd - segStart + 1;
-      const totalAddRows = Math.max(bNewList.length, eNewList.length, origSegCount);
+      const bNewList = (hasB && bStartIdx !== -1) ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate) : [];
+      const eNewList = (hasE && eStartIdx !== -1) ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate) : [];
 
-      const displayRows = [];
+      // ==============================================
+      // 1. 建立獨立運算的 B佇列 與 E佇列 (包含區間內所有新舊時間)
+      // ==============================================
+      let bQueue = [];
+      let eQueue = [];
 
+      for (let i = segStart; i <= segEnd; i++) {
+        let r = rawList[i]; // i 超過 rawList.length 時會是 undefined (擴充列)
+        
+        // --- 準備 B 屬性 ---
+        let bTime = "", oldB = "", isBNew = false;
+        if (hasB && i >= bStartIdx && i < bStartIdx + bCount) {
+          isBNew = true;
+          bTime = bNewList[i - bStartIdx];
+          oldB = (r && i <= bEndIdx) ? r.b : "";
+        } else {
+          bTime = r ? r.b : "";
+        }
+
+        let inBRange = false, isBAnchor = false;
+        if (r) {
+          isBAnchor = bAnchors.includes(i);
+          inBRange = isInsideRange(i, bEarly, bLate) && !isBAnchor;
+        } else if (hasB && i > bEndIdx) {
+          if (rawList[bEndIdx]) inBRange = isInsideRange(bEndIdx, bEarly, bLate) && !bAnchors.includes(bEndIdx);
+        }
+
+        bQueue.push({
+          time: bTime, timeSec: timeToSeconds(bTime),
+          c: r ? r.c : "", oldB: oldB, d: r ? r.d : "", g: r ? r.g : "",
+          isModified: isBNew, isAnchor: isBAnchor, inRange: inBRange
+        });
+
+        // --- 準備 E 屬性 ---
+        let eTime = "", oldE = "", isENew = false;
+        if (hasE && i >= eStartIdx && i < eStartIdx + eCount) {
+          isENew = true;
+          eTime = eNewList[i - eStartIdx];
+          oldE = (r && i <= eEndIdx) ? r.e : "";
+        } else {
+          eTime = r ? r.e : "";
+        }
+
+        let inERange = false, isEAnchor = false;
+        if (r) {
+          isEAnchor = eAnchors.includes(i);
+          inERange = isInsideRange(i, eEarly, eLate) && !isEAnchor;
+        } else if (hasE && i > eEndIdx) {
+          if (rawList[eEndIdx]) inERange = isInsideRange(eEndIdx, eEarly, eLate) && !eAnchors.includes(eEndIdx);
+        }
+
+        eQueue.push({
+          time: eTime, timeSec: timeToSeconds(eTime),
+          oldE: oldE, f: r ? r.f : "",
+          isModified: isENew, isAnchor: isEAnchor, inRange: inERange
+        });
+      }
+
+      // ==============================================
+      // 2. 啟動「動態錯位對齊引擎」 (The Match Engine)
+      // ==============================================
+      let mergedRows = [];
+      let bIdx = 0;
+      let eIdx = 0;
+
+      while (bIdx < bQueue.length || eIdx < eQueue.length) {
+        let bItem = bIdx < bQueue.length ? bQueue[bIdx] : null;
+        let eItem = eIdx < eQueue.length ? eQueue[eIdx] : null;
+
+        if (bItem && eItem) {
+          let bSec = bItem.timeSec;
+          let eSec = eItem.timeSec;
+
+          // 如果任一方為空白(NaN)，強制配對合併以維持版面整齊
+          if (isNaN(bSec) || isNaN(eSec)) {
+            mergedRows.push(createMergedRow(bItem, eItem));
+            bIdx++; eIdx++;
+            continue;
+          }
+
+          // 判斷雙方所處的錨點狀態 (尖峰/離峰)
+          let isBInside = bItem.inRange || bItem.isAnchor;
+          let isEInside = eItem.inRange || eItem.isAnchor;
+          
+          // 動態變速門檻設定
+          let thresholdSec = 660; // 預設：都在外 11 分鐘
+          if (isBInside && isEInside) {
+            thresholdSec = 270;   // 等級三：都在內 4.5 分鐘
+          } else if (isBInside || isEInside) {
+            thresholdSec = 420;   // 等級二：一內一外 7 分鐘
+          }
+
+          // 計算實體時間差 (並過濾跨午夜狀況)
+          let diff = eSec - bSec;
+          if (diff < -43200) diff += 86400;      // E跨越到了隔天
+          else if (diff > 43200) diff -= 86400;  // B跨越到了隔天
+          
+          if (diff >= thresholdSec) {
+            // 時間差達標！雙方完美合併在同一列
+            mergedRows.push(createMergedRow(bItem, eItem));
+            bIdx++; eIdx++;
+          } else {
+            // 時間差不足 (太早了來不及)，E欄被迫提早出發，B欄留白等待下一個E！
+            mergedRows.push(createMergedRow(null, eItem));
+            eIdx++;
+          }
+
+        } else if (bItem) {
+          // 只剩下 B 佇列有資料
+          mergedRows.push(createMergedRow(bItem, null));
+          bIdx++;
+        } else if (eItem) {
+          // 只剩下 E 佇列有資料
+          mergedRows.push(createMergedRow(null, eItem));
+          eIdx++;
+        }
+      }
+
+      // ==============================================
+      // 3. 組裝最終表格 (結合 加車前 + 錯位區 + 加車後)
+      // ==============================================
+      let displayRows = [];
+      
+      // 加入區間前的原始資料
       for (let i = 0; i < segStart; i++) {
-        const item = rawList[i];
-        const isAnchorB = bAnchors.includes(i);
-        const isAnchorE = eAnchors.includes(i);
-        const inBRange = isInsideRange(i, bEarly, bLate);
-        const inERange = isInsideRange(i, eEarly, eLate);
-
+        let r = rawList[i];
         displayRows.push({
-          c: item.c,
-          newBTime: "",
-          b: item.b,
-          d: item.d,
-          g: item.g,
-          newETime: "",
-          e: item.e,
-          f: item.f,
-          isBModified: false,
-          isEModified: false,
-          isAnchorB: isAnchorB,
-          isAnchorE: isAnchorE,
-          inBRange: inBRange && !isAnchorB,
-          inERange: inERange && !isAnchorE
+          c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
+          newETime: "", e: r.e, f: r.f,
+          isBModified: false, isEModified: false,
+          isAnchorB: bAnchors.includes(i), isAnchorE: eAnchors.includes(i),
+          inBRange: isInsideRange(i, bEarly, bLate) && !bAnchors.includes(i),
+          inERange: isInsideRange(i, eEarly, eLate) && !eAnchors.includes(i)
         });
       }
 
-      for (let k = 0; k < totalAddRows; k++) {
-        let c = "", d = "", g = "", f = "";
-        let origIdx = -1;
+      // 貼上經過引擎配對好的錯位區
+      displayRows = displayRows.concat(mergedRows);
 
-        if (k < origSegCount) {
-          origIdx = segStart + k;
-          const origItem = rawList[origIdx];
-          c = origItem.c;
-          d = origItem.d;
-          g = origItem.g;
-          f = origItem.f;
-        }
-
-        let curB = "";
-        let oldB = "";
-        if (hasB) {
-          curB = k < bNewList.length ? bNewList[k] : "";
-          oldB = (origIdx !== -1 && rawList[origIdx].b) ? rawList[origIdx].b : "";
-        } else if (k < origSegCount) {
-          curB = rawList[segStart + k].b;
-        }
-
-        let curE = "";
-        let oldE = "";
-        if (hasE) {
-          curE = k < eNewList.length ? eNewList[k] : "";
-          oldE = (origIdx !== -1 && rawList[origIdx].e) ? rawList[origIdx].e : "";
-        } else if (k < origSegCount) {
-          curE = rawList[segStart + k].e;
-        }
-
-        const isAnchorB = origIdx !== -1 && bAnchors.includes(origIdx);
-        const isAnchorE = origIdx !== -1 && eAnchors.includes(origIdx);
-        const inBRange = origIdx !== -1 && isInsideRange(origIdx, bEarly, bLate);
-        const inERange = origIdx !== -1 && isInsideRange(origIdx, eEarly, eLate);
-
-        displayRows.push({
-          c: c,
-          newBTime: oldB,
-          b: curB,
-          d: d,
-          g: g,
-          newETime: oldE,
-          e: curE,
-          f: f,
-          isBModified: curB !== "" && hasB,
-          isEModified: curE !== "" && hasE,
-          isAnchorB: isAnchorB,
-          isAnchorE: isAnchorE,
-          inBRange: inBRange && !isAnchorB,
-          inERange: inERange && !isAnchorE
-        });
-      }
-
+      // 加入區間後的原始資料 (回歸原表對齊)
       for (let i = segEnd + 1; i < rawList.length; i++) {
-        const item = rawList[i];
-        const isAnchorB = bAnchors.includes(i);
-        const isAnchorE = eAnchors.includes(i);
-        const inBRange = isInsideRange(i, bEarly, bLate);
-        const inERange = isInsideRange(i, eEarly, eLate);
-
+        let r = rawList[i];
         displayRows.push({
-          c: item.c,
-          newBTime: "",
-          b: item.b,
-          d: item.d,
-          g: item.g,
-          newETime: "",
-          e: item.e,
-          f: item.f,
-          isBModified: false,
-          isEModified: false,
-          isAnchorB: isAnchorB,
-          isAnchorE: isAnchorE,
-          inBRange: inBRange && !isAnchorB,
-          inERange: inERange && !isAnchorE
+          c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
+          newETime: "", e: r.e, f: r.f,
+          isBModified: false, isEModified: false,
+          isAnchorB: bAnchors.includes(i), isAnchorE: eAnchors.includes(i),
+          inBRange: isInsideRange(i, bEarly, bLate) && !bAnchors.includes(i),
+          inERange: isInsideRange(i, eEarly, eLate) && !eAnchors.includes(i)
         });
       }
 
@@ -692,32 +696,15 @@
     }
 
     function renderRows(rows) {
-      // 在每次渲染表格前，把當下的資料儲存起來準備上傳用
       currentExportData = rows; 
-      
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
 
       rows.forEach(r => {
         const tr = document.createElement("tr");
 
-        let bClass = "";
-        if (r.isAnchorB) {
-          bClass = "time-anchor";
-        } else if (r.isBModified) {
-          bClass = "cell-modified-b";
-        } else if (r.inBRange) {
-          bClass = "cell-b-range";
-        }
-
-        let eClass = "";
-        if (r.isAnchorE) {
-          eClass = "time-anchor";
-        } else if (r.isEModified) {
-          eClass = "cell-modified-e";
-        } else if (r.inERange) {
-          eClass = "cell-e-range";
-        }
+        let bClass = r.isAnchorB ? "time-anchor" : r.isBModified ? "cell-modified-b" : r.inBRange ? "cell-b-range" : "";
+        let eClass = r.isAnchorE ? "time-anchor" : r.isEModified ? "cell-modified-e" : r.inERange ? "cell-e-range" : "";
 
         tr.innerHTML = `
           <td>${r.c}</td>
@@ -729,7 +716,6 @@
           <td class="${eClass}">${r.e}</td>
           <td>${r.f}</td>
         `;
-
         tbody.appendChild(tr);
       });
     }
@@ -746,14 +732,12 @@
       updateTable();
     });
 
-    // === 上傳至新試算表 (addtrain) 的功能 ===
     document.getElementById("btnUpload").addEventListener("click", async () => {
       if (!currentExportData || currentExportData.length === 0) {
         alert("目前沒有資料可以上傳！");
         return;
       }
       
-      // 防止重複點擊
       const btn = document.getElementById("btnUpload");
       btn.innerText = "資料上傳中...";
       btn.disabled = true;
@@ -762,19 +746,19 @@
         const response = await fetch(UPLOAD_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
+          redirect: "follow", 
           body: JSON.stringify({ data: currentExportData })
         });
         
         const result = await response.json();
         if (result.status === "success") {
-          alert("上傳成功！已建立新工作表：" + result.sheetName);
+          alert("上傳成功！已成功覆蓋更新： " + result.sheetName);
         } else {
           alert("上傳失敗：" + result.message);
         }
       } catch (error) {
         alert("發生錯誤，請檢查網路連線或 Apps Script 權限設定。\n錯誤訊息: " + error);
       } finally {
-        // 恢復按鈕狀態
         btn.innerText = "上傳至試算表";
         btn.disabled = false;
       }
