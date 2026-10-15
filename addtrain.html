@@ -200,6 +200,61 @@
       color: #64748b;
       font-size: 15px;
     }
+
+    /* 防誤觸確認視窗 (Modal) 樣式 */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.65);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .modal-box {
+      background-color: #262a34;
+      border: 1px solid #4b5563;
+      border-radius: 10px;
+      padding: 24px 32px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      text-align: center;
+      min-width: 300px;
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #f87171;
+      margin-bottom: 22px;
+      letter-spacing: 0.5px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    .btn-modal {
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-modal:hover {
+      opacity: 0.85;
+    }
+    .btn-confirm {
+      background-color: #10b981;
+      color: #ffffff;
+    }
+    .btn-cancel {
+      background-color: #4b5563;
+      color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -259,6 +314,17 @@
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
+  </div>
+
+  <!-- 防誤觸上傳確認視窗 -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-box">
+      <div class="modal-title">⚠️ 上傳後不能修改</div>
+      <div class="modal-actions">
+        <button type="button" class="btn-modal btn-confirm" id="btnConfirmUpload">確定上傳</button>
+        <button type="button" class="btn-modal btn-cancel" id="btnCancelUpload">取消上傳</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -529,73 +595,94 @@
       const eStartIdx = hasE ? rawList.findIndex(r => r.e === eStart) : -1;
       const eEndIdx = hasE ? rawList.findIndex(r => r.e === eEnd) : -1;
 
-      const validBStart = hasB ? bStartIdx : Infinity;
-      const validEStart = hasE ? eStartIdx : Infinity;
+      // 嚴格鎖定在原表選取的起訖索引範圍內，絕不向外吞噬原表其他列
+      const validBStart = (hasB && bStartIdx !== -1) ? bStartIdx : Infinity;
+      const validEStart = (hasE && eStartIdx !== -1) ? eStartIdx : Infinity;
       const segStart = Math.min(validBStart, validEStart);
       
-      const validBEnd = hasB ? Math.max(bEndIdx, bStartIdx + bCount - 1) : -1;
-      const validEEnd = hasE ? Math.max(eEndIdx, eStartIdx + eCount - 1) : -1;
+      const validBEnd = (hasB && bEndIdx !== -1) ? bEndIdx : -1;
+      const validEEnd = (hasE && eEndIdx !== -1) ? eEndIdx : -1;
       const segEnd = Math.max(validBEnd, validEEnd);
 
-      const bNewList = (hasB && bStartIdx !== -1) ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate) : [];
-      const eNewList = (hasE && eStartIdx !== -1) ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate) : [];
+      const bNewList = (hasB && bStartIdx !== -1 && bEndIdx >= bStartIdx)
+        ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate)
+        : [];
+      const eNewList = (hasE && eStartIdx !== -1 && eEndIdx >= eStartIdx)
+        ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate)
+        : [];
 
       // ==============================================
-      // 1. 建立獨立運算的 B佇列 與 E佇列 (包含區間內所有新舊時間)
+      // 1. 獨立建立區間內的 B 佇列 與 E 佇列 (多出班次自動留白姓名)
       // ==============================================
       let bQueue = [];
       let eQueue = [];
 
+      // 建立 B 佇列
       for (let i = segStart; i <= segEnd; i++) {
-        let r = rawList[i]; // i 超過 rawList.length 時會是 undefined (擴充列)
-        
-        // --- 準備 B 屬性 ---
-        let bTime = "", oldB = "", isBNew = false;
-        if (hasB && i >= bStartIdx && i < bStartIdx + bCount) {
-          isBNew = true;
-          bTime = bNewList[i - bStartIdx];
-          oldB = (r && i <= bEndIdx) ? r.b : "";
+        if (hasB && i === bStartIdx) {
+          const origBCount = bEndIdx - bStartIdx + 1;
+          const totalBItems = Math.max(bNewList.length, origBCount);
+          for (let k = 0; k < totalBItems; k++) {
+            const origIdx = k < origBCount ? (bStartIdx + k) : -1;
+            const r = origIdx !== -1 ? rawList[origIdx] : null;
+            const bTime = k < bNewList.length ? bNewList[k] : "";
+            const oldB = r ? r.b : "";
+            const isBAnchor = origIdx !== -1 ? bAnchors.includes(origIdx) : false;
+            const inBRange = origIdx !== -1
+              ? (isInsideRange(origIdx, bEarly, bLate) && !isBAnchor)
+              : (isInsideRange(bEndIdx, bEarly, bLate) && !bAnchors.includes(bEndIdx));
+
+            bQueue.push({
+              time: bTime, timeSec: timeToSeconds(bTime),
+              c: r ? r.c : "", oldB: oldB, d: r ? r.d : "", g: r ? r.g : "",
+              isModified: k < bNewList.length, isAnchor: isBAnchor, inRange: inBRange
+            });
+          }
+          i = bEndIdx; // 跳過已處理的 B 加車區間
         } else {
-          bTime = r ? r.b : "";
+          const r = rawList[i];
+          const isBAnchor = bAnchors.includes(i);
+          const inBRange = isInsideRange(i, bEarly, bLate) && !isBAnchor;
+          bQueue.push({
+            time: r.b, timeSec: timeToSeconds(r.b),
+            c: r.c, oldB: "", d: r.d, g: r.g,
+            isModified: false, isAnchor: isBAnchor, inRange: inBRange
+          });
         }
+      }
 
-        let inBRange = false, isBAnchor = false;
-        if (r) {
-          isBAnchor = bAnchors.includes(i);
-          inBRange = isInsideRange(i, bEarly, bLate) && !isBAnchor;
-        } else if (hasB && i > bEndIdx) {
-          if (rawList[bEndIdx]) inBRange = isInsideRange(bEndIdx, bEarly, bLate) && !bAnchors.includes(bEndIdx);
-        }
+      // 建立 E 佇列
+      for (let i = segStart; i <= segEnd; i++) {
+        if (hasE && i === eStartIdx) {
+          const origECount = eEndIdx - eStartIdx + 1;
+          const totalEItems = Math.max(eNewList.length, origECount);
+          for (let k = 0; k < totalEItems; k++) {
+            const origIdx = k < origECount ? (eStartIdx + k) : -1;
+            const r = origIdx !== -1 ? rawList[origIdx] : null;
+            const eTime = k < eNewList.length ? eNewList[k] : "";
+            const oldE = r ? r.e : "";
+            const isEAnchor = origIdx !== -1 ? eAnchors.includes(origIdx) : false;
+            const inERange = origIdx !== -1
+              ? (isInsideRange(origIdx, eEarly, eLate) && !isEAnchor)
+              : (isInsideRange(eEndIdx, eEarly, eLate) && !eAnchors.includes(eEndIdx));
 
-        bQueue.push({
-          time: bTime, timeSec: timeToSeconds(bTime),
-          c: r ? r.c : "", oldB: oldB, d: r ? r.d : "", g: r ? r.g : "",
-          isModified: isBNew, isAnchor: isBAnchor, inRange: inBRange
-        });
-
-        // --- 準備 E 屬性 ---
-        let eTime = "", oldE = "", isENew = false;
-        if (hasE && i >= eStartIdx && i < eStartIdx + eCount) {
-          isENew = true;
-          eTime = eNewList[i - eStartIdx];
-          oldE = (r && i <= eEndIdx) ? r.e : "";
+            eQueue.push({
+              time: eTime, timeSec: timeToSeconds(eTime),
+              oldE: oldE, f: r ? r.f : "",
+              isModified: k < eNewList.length, isAnchor: isEAnchor, inRange: inERange
+            });
+          }
+          i = eEndIdx; // 跳過已處理的 E 加車區間
         } else {
-          eTime = r ? r.e : "";
+          const r = rawList[i];
+          const isEAnchor = eAnchors.includes(i);
+          const inERange = isInsideRange(i, eEarly, eLate) && !isEAnchor;
+          eQueue.push({
+            time: r.e, timeSec: timeToSeconds(r.e),
+            oldE: "", f: r.f,
+            isModified: false, isAnchor: isEAnchor, inRange: inERange
+          });
         }
-
-        let inERange = false, isEAnchor = false;
-        if (r) {
-          isEAnchor = eAnchors.includes(i);
-          inERange = isInsideRange(i, eEarly, eLate) && !isEAnchor;
-        } else if (hasE && i > eEndIdx) {
-          if (rawList[eEndIdx]) inERange = isInsideRange(eEndIdx, eEarly, eLate) && !eAnchors.includes(eEndIdx);
-        }
-
-        eQueue.push({
-          time: eTime, timeSec: timeToSeconds(eTime),
-          oldE: oldE, f: r ? r.f : "",
-          isModified: isENew, isAnchor: isEAnchor, inRange: inERange
-        });
       }
 
       // ==============================================
@@ -613,7 +700,7 @@
           let bSec = bItem.timeSec;
           let eSec = eItem.timeSec;
 
-          // 如果任一方為空白(NaN)，強制配對合併以維持版面整齊
+          // 若任一方為空白(NaN)，直接合併維持版面
           if (isNaN(bSec) || isNaN(eSec)) {
             mergedRows.push(createMergedRow(bItem, eItem));
             bIdx++; eIdx++;
@@ -634,25 +721,23 @@
 
           // 計算實體時間差 (並過濾跨午夜狀況)
           let diff = eSec - bSec;
-          if (diff < -43200) diff += 86400;      // E跨越到了隔天
-          else if (diff > 43200) diff -= 86400;  // B跨越到了隔天
+          if (diff < -43200) diff += 86400;
+          else if (diff > 43200) diff -= 86400;
           
           if (diff >= thresholdSec) {
-            // 時間差達標！雙方完美合併在同一列
+            // 時間差達標，雙方合併在同一列
             mergedRows.push(createMergedRow(bItem, eItem));
             bIdx++; eIdx++;
           } else {
-            // 時間差不足 (太早了來不及)，E欄被迫提早出發，B欄留白等待下一個E！
+            // 時間差不足，E 欄獨立成列，B 欄往下等待下一個 E
             mergedRows.push(createMergedRow(null, eItem));
             eIdx++;
           }
 
         } else if (bItem) {
-          // 只剩下 B 佇列有資料
           mergedRows.push(createMergedRow(bItem, null));
           bIdx++;
         } else if (eItem) {
-          // 只剩下 E 佇列有資料
           mergedRows.push(createMergedRow(null, eItem));
           eIdx++;
         }
@@ -679,7 +764,7 @@
       // 貼上經過引擎配對好的錯位區
       displayRows = displayRows.concat(mergedRows);
 
-      // 加入區間後的原始資料 (回歸原表對齊)
+      // 加入區間後的原始資料 (100% 回歸原表對齊，絕不吞噬)
       for (let i = segEnd + 1; i < rawList.length; i++) {
         let r = rawList[i];
         displayRows.push({
@@ -732,12 +817,27 @@
       updateTable();
     });
 
-    document.getElementById("btnUpload").addEventListener("click", async () => {
+    // === 防誤觸上傳確認視窗邏輯 ===
+    const confirmModal = document.getElementById("confirmModal");
+
+    // 1. 點擊「上傳至試算表」按鈕 -> 跳出確認視窗
+    document.getElementById("btnUpload").addEventListener("click", () => {
       if (!currentExportData || currentExportData.length === 0) {
         alert("目前沒有資料可以上傳！");
         return;
       }
-      
+      confirmModal.style.display = "flex";
+    });
+
+    // 2. 點擊「取消上傳」按鈕 -> 關閉視窗，不做任何動作
+    document.getElementById("btnCancelUpload").addEventListener("click", () => {
+      confirmModal.style.display = "none";
+    });
+
+    // 3. 點擊「確定上傳」按鈕 -> 關閉視窗，正式執行上傳
+    document.getElementById("btnConfirmUpload").addEventListener("click", async () => {
+      confirmModal.style.display = "none";
+
       const btn = document.getElementById("btnUpload");
       btn.innerText = "資料上傳中...";
       btn.disabled = true;
