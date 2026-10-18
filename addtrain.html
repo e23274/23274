@@ -201,7 +201,7 @@
       font-size: 15px;
     }
 
-    /* 防誤觸確認視窗 (Modal) 樣式 */
+    /* 防誤觸確認視窗 */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -316,7 +316,6 @@
     </table>
   </div>
 
-  <!-- 防誤觸上傳確認視窗 -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal-box">
       <div class="modal-title">⚠️ 上傳後不能修改</div>
@@ -334,13 +333,23 @@
     let rawList = [];
     let currentExportData = []; 
 
+    let bAnchors = [];
+    let eAnchors = [];
+    let bOrigTimes = [null, null, null, null];
+    let eOrigTimes = [null, null, null, null];
+
     let bEarly = { start: null, end: null };
     let bLate  = { start: null, end: null };
     let eEarly = { start: null, end: null };
     let eLate  = { start: null, end: null };
 
-    let bAnchors = [];
-    let eAnchors = [];
+    // 修正：將 makeRange 放在全域範圍，供 init 與 updateTable 共同呼叫
+    function makeRange(idxA, idxB) {
+      if (idxA !== null && idxB !== null) {
+        return { start: Math.min(idxA, idxB), end: Math.max(idxA, idxB) };
+      }
+      return { start: null, end: null };
+    }
 
     function formatTo24HourTime(val) {
       if (val === null || val === undefined || val === "") return "";
@@ -406,7 +415,16 @@
       return inEarly || inLate;
     }
 
-    function generateSmartTripTimes(startStr, endStr, count, startIdx, endIdx, earlyRange, lateRange) {
+    function isTimeInAnchor(tSec, times) {
+      if (isNaN(tSec)) return false;
+      let [e1, e2, l1, l2] = times;
+      let inE = (e1 !== null && e2 !== null) && tSec > Math.min(e1, e2) && tSec < Math.max(e1, e2);
+      let inL = (l1 !== null && l2 !== null) && tSec > Math.min(l1, l2) && tSec < Math.max(l1, l2);
+      return inE || inL;
+    }
+
+    // 錨點內端點減 150 秒算均分，只要在錨點內就加回 150 秒，外側一律不加
+    function generateSmartTripTimes(startStr, endStr, count, origTimes) {
       if (!startStr || !endStr || !count || count <= 0) return [];
       const startSec = timeToSeconds(startStr);
       const endSec = timeToSeconds(endStr);
@@ -414,41 +432,44 @@
 
       if (count === 1) return [secondsToTime(startSec)];
 
-      const OFFSET = 150; 
-      const startIn = isInsideRange(startIdx, earlyRange, lateRange);
-      const endIn = isInsideRange(endIdx, earlyRange, lateRange);
+      const startIn = isTimeInAnchor(startSec, origTimes);
+      const endIn = isTimeInAnchor(endSec, origTimes);
+      const OFFSET = 150; // 150 秒 (2分30秒)
 
-      if (!startIn && endIn) {
-        const effSpan = (endSec - OFFSET) - startSec;
-        const step = effSpan / (count - 1);
+      // 兩點都在內或都在外：直接均分
+      if ((startIn && endIn) || (!startIn && !endIn)) {
+        const step = (endSec - startSec) / (count - 1);
         const times = [];
         for (let i = 0; i < count; i++) {
-          const curIdx = startIdx + i;
-          const curIn = isInsideRange(curIdx, earlyRange, lateRange);
-          const t = startSec + i * step + (curIn ? OFFSET : 0);
-          times.push(secondsToTime(t));
+          times.push(secondsToTime(startSec + i * step));
         }
         return times;
       }
 
-      if (startIn && !endIn) {
-        const effStart = startSec + OFFSET;
-        const step = (endSec - effStart) / (count - 1);
-        const times = [];
-        for (let i = 0; i < count; i++) {
-          const curIdx = startIdx + i;
-          const curIn = isInsideRange(curIdx, earlyRange, lateRange);
-          const t = effStart + i * step - (curIn ? OFFSET : 0);
-          times.push(secondsToTime(t));
-        }
-        return times;
-      }
+      // 一點在內、一點在外：在錨點內的端點預扣 150 秒
+      const adjStart = startIn ? (startSec - OFFSET) : startSec;
+      const adjEnd   = endIn   ? (endSec - OFFSET)   : endSec;
+      const step     = (adjEnd - adjStart) / (count - 1);
 
-      const step = (endSec - startSec) / (count - 1);
       const times = [];
       for (let i = 0; i < count; i++) {
-        times.push(secondsToTime(startSec + i * step));
+        const baseT = adjStart + i * step;
+        
+        let inAnchor = false;
+        if (i === 0) {
+          inAnchor = startIn;
+        } else if (i === count - 1) {
+          inAnchor = endIn;
+        } else {
+          // 中間班次：若加上 150 秒後落在錨點時間範圍內，即屬於錨點內
+          inAnchor = isTimeInAnchor(baseT + OFFSET, origTimes);
+        }
+
+        // 錨點內的加回 150 秒，外側不加
+        const finalT = inAnchor ? (baseT + OFFSET) : baseT;
+        times.push(secondsToTime(finalT));
       }
+
       return times;
     }
 
@@ -507,11 +528,6 @@
         const eIdx34 = getCellInt(34, 'P');
         const eIdx35 = getCellInt(35, 'P');
 
-        function makeRange(idxA, idxB) {
-          if (idxA !== null && idxB !== null) return { start: Math.min(idxA, idxB), end: Math.max(idxA, idxB) };
-          return { start: null, end: null };
-        }
-
         bEarly = makeRange(bIdx26, bIdx27);
         bLate  = makeRange(bIdx34, bIdx35);
         eEarly = makeRange(eIdx26, eIdx27);
@@ -519,6 +535,9 @@
 
         bAnchors = [bIdx26, bIdx27, bIdx34, bIdx35].filter(idx => idx !== null);
         eAnchors = [eIdx26, eIdx27, eIdx34, eIdx35].filter(idx => idx !== null);
+
+        bOrigTimes = [bIdx26, bIdx27, bIdx34, bIdx35].map(idx => (idx !== null && rawList[idx]) ? timeToSeconds(rawList[idx].b) : null);
+        eOrigTimes = [eIdx26, eIdx27, eIdx34, eIdx35].map(idx => (idx !== null && rawList[idx]) ? timeToSeconds(rawList[idx].e) : null);
 
         populateDropdown("bStart", bTimesSet);
         populateDropdown("bEnd", bTimesSet);
@@ -530,7 +549,8 @@
 
         updateTable();
       } catch (e) {
-        document.getElementById("loading").innerText = "無法載入資料，請確認網路連線！";
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("loading").innerText = "無法載入資料，請確認網路連線！(" + e.message + ")";
       }
     }
 
@@ -545,7 +565,6 @@
       });
     }
 
-    // 建立合併列：依照「B為排版主體，中間跟隨B」的邏輯
     function createMergedRow(bItem, eItem) {
       return {
         c: bItem ? bItem.c : "",
@@ -558,10 +577,10 @@
         f: eItem ? eItem.f : "",
         isBModified: bItem ? bItem.isModified : false,
         isEModified: eItem ? eItem.isModified : false,
-        isAnchorB: bItem ? bItem.isAnchor : false,
-        isAnchorE: eItem ? eItem.isAnchor : false,
-        inBRange: bItem ? bItem.inRange : false,
-        inERange: eItem ? eItem.inRange : false
+        isAnchorB: false,
+        isAnchorE: false,
+        inBRange: false,
+        inERange: false
       };
     }
 
@@ -574,16 +593,17 @@
       const eEnd = document.getElementById("eEnd").value;
       const eCount = parseInt(document.getElementById("eCount").value, 10);
 
-      const hasB = bStart && bEnd && bCount > 0;
-      const hasE = eStart && eEnd && eCount > 0;
+      const hasB = Boolean(bStart && bEnd && bCount > 0);
+      const hasE = Boolean(eStart && eEnd && eCount > 0);
 
-      // 如果都沒有加車，直接呈現原表
+      // 未設定加車時，直接呈現原始班表與原錨點
       if (!hasB && !hasE) {
         renderRows(rawList.map((r, idx) => ({
           c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
           newETime: "", e: r.e, f: r.f,
           isBModified: false, isEModified: false,
-          isAnchorB: bAnchors.includes(idx), isAnchorE: eAnchors.includes(idx),
+          isAnchorB: bAnchors.includes(idx),
+          isAnchorE: eAnchors.includes(idx),
           inBRange: isInsideRange(idx, bEarly, bLate) && !bAnchors.includes(idx),
           inERange: isInsideRange(idx, eEarly, eLate) && !eAnchors.includes(idx)
         })));
@@ -595,29 +615,24 @@
       const eStartIdx = hasE ? rawList.findIndex(r => r.e === eStart) : -1;
       const eEndIdx = hasE ? rawList.findIndex(r => r.e === eEnd) : -1;
 
-      // 嚴格鎖定在原表選取的起訖索引範圍內，絕不向外吞噬原表其他列
       const validBStart = (hasB && bStartIdx !== -1) ? bStartIdx : Infinity;
       const validEStart = (hasE && eStartIdx !== -1) ? eStartIdx : Infinity;
-      const segStart = Math.min(validBStart, validEStart);
+      let segStart = Math.min(validBStart, validEStart);
       
       const validBEnd = (hasB && bEndIdx !== -1) ? bEndIdx : -1;
       const validEEnd = (hasE && eEndIdx !== -1) ? eEndIdx : -1;
-      const segEnd = Math.max(validBEnd, validEEnd);
+      let segEnd = Math.max(validBEnd, validEEnd);
 
       const bNewList = (hasB && bStartIdx !== -1 && bEndIdx >= bStartIdx)
-        ? generateSmartTripTimes(bStart, bEnd, bCount, bStartIdx, bEndIdx, bEarly, bLate)
+        ? generateSmartTripTimes(bStart, bEnd, bCount, bOrigTimes)
         : [];
       const eNewList = (hasE && eStartIdx !== -1 && eEndIdx >= eStartIdx)
-        ? generateSmartTripTimes(eStart, eEnd, eCount, eStartIdx, eEndIdx, eEarly, eLate)
+        ? generateSmartTripTimes(eStart, eEnd, eCount, eOrigTimes)
         : [];
 
-      // ==============================================
-      // 1. 獨立建立區間內的 B 佇列 與 E 佇列 (多出班次自動留白姓名)
-      // ==============================================
       let bQueue = [];
       let eQueue = [];
 
-      // 建立 B 佇列
       for (let i = segStart; i <= segEnd; i++) {
         if (hasB && i === bStartIdx) {
           const origBCount = bEndIdx - bStartIdx + 1;
@@ -626,32 +641,23 @@
             const origIdx = k < origBCount ? (bStartIdx + k) : -1;
             const r = origIdx !== -1 ? rawList[origIdx] : null;
             const bTime = k < bNewList.length ? bNewList[k] : "";
-            const oldB = r ? r.b : "";
-            const isBAnchor = origIdx !== -1 ? bAnchors.includes(origIdx) : false;
-            const inBRange = origIdx !== -1
-              ? (isInsideRange(origIdx, bEarly, bLate) && !isBAnchor)
-              : (isInsideRange(bEndIdx, bEarly, bLate) && !bAnchors.includes(bEndIdx));
-
             bQueue.push({
               time: bTime, timeSec: timeToSeconds(bTime),
-              c: r ? r.c : "", oldB: oldB, d: r ? r.d : "", g: r ? r.g : "",
-              isModified: k < bNewList.length, isAnchor: isBAnchor, inRange: inBRange
+              c: r ? r.c : "", oldB: r ? r.b : "", d: r ? r.d : "", g: r ? r.g : "",
+              isModified: k < bNewList.length
             });
           }
-          i = bEndIdx; // 跳過已處理的 B 加車區間
-        } else {
+          i = bEndIdx; 
+        } else if (rawList[i]) {
           const r = rawList[i];
-          const isBAnchor = bAnchors.includes(i);
-          const inBRange = isInsideRange(i, bEarly, bLate) && !isBAnchor;
           bQueue.push({
             time: r.b, timeSec: timeToSeconds(r.b),
             c: r.c, oldB: "", d: r.d, g: r.g,
-            isModified: false, isAnchor: isBAnchor, inRange: inBRange
+            isModified: false
           });
         }
       }
 
-      // 建立 E 佇列
       for (let i = segStart; i <= segEnd; i++) {
         if (hasE && i === eStartIdx) {
           const origECount = eEndIdx - eStartIdx + 1;
@@ -660,34 +666,23 @@
             const origIdx = k < origECount ? (eStartIdx + k) : -1;
             const r = origIdx !== -1 ? rawList[origIdx] : null;
             const eTime = k < eNewList.length ? eNewList[k] : "";
-            const oldE = r ? r.e : "";
-            const isEAnchor = origIdx !== -1 ? eAnchors.includes(origIdx) : false;
-            const inERange = origIdx !== -1
-              ? (isInsideRange(origIdx, eEarly, eLate) && !isEAnchor)
-              : (isInsideRange(eEndIdx, eEarly, eLate) && !eAnchors.includes(eEndIdx));
-
             eQueue.push({
               time: eTime, timeSec: timeToSeconds(eTime),
-              oldE: oldE, f: r ? r.f : "",
-              isModified: k < eNewList.length, isAnchor: isEAnchor, inRange: inERange
+              oldE: r ? r.e : "", f: r ? r.f : "",
+              isModified: k < eNewList.length
             });
           }
-          i = eEndIdx; // 跳過已處理的 E 加車區間
-        } else {
+          i = eEndIdx; 
+        } else if (rawList[i]) {
           const r = rawList[i];
-          const isEAnchor = eAnchors.includes(i);
-          const inERange = isInsideRange(i, eEarly, eLate) && !isEAnchor;
           eQueue.push({
             time: r.e, timeSec: timeToSeconds(r.e),
             oldE: "", f: r.f,
-            isModified: false, isAnchor: isEAnchor, inRange: inERange
+            isModified: false
           });
         }
       }
 
-      // ==============================================
-      // 2. 啟動「動態錯位對齊引擎」 (The Match Engine)
-      // ==============================================
       let mergedRows = [];
       let bIdx = 0;
       let eIdx = 0;
@@ -700,40 +695,30 @@
           let bSec = bItem.timeSec;
           let eSec = eItem.timeSec;
 
-          // 若任一方為空白(NaN)，直接合併維持版面
           if (isNaN(bSec) || isNaN(eSec)) {
             mergedRows.push(createMergedRow(bItem, eItem));
             bIdx++; eIdx++;
             continue;
           }
 
-          // 判斷雙方所處的錨點狀態 (尖峰/離峰)
-          let isBInside = bItem.inRange || bItem.isAnchor;
-          let isEInside = eItem.inRange || eItem.isAnchor;
+          let isBInside = isTimeInAnchor(bSec, bOrigTimes);
+          let isEInside = isTimeInAnchor(eSec, eOrigTimes);
           
-          // 動態變速門檻設定
-          let thresholdSec = 660; // 預設：都在外 11 分鐘
-          if (isBInside && isEInside) {
-            thresholdSec = 270;   // 等級三：都在內 4.5 分鐘
-          } else if (isBInside || isEInside) {
-            thresholdSec = 420;   // 等級二：一內一外 7 分鐘
-          }
+          let thresholdSec = 660; // 都在外：11 分鐘
+          if (isBInside && isEInside) thresholdSec = 270; // 都在內：4.5 分鐘
+          else if (isBInside || isEInside) thresholdSec = 420; // 一內一外：7 分鐘
 
-          // 計算實體時間差 (並過濾跨午夜狀況)
           let diff = eSec - bSec;
           if (diff < -43200) diff += 86400;
           else if (diff > 43200) diff -= 86400;
           
           if (diff >= thresholdSec) {
-            // 時間差達標，雙方合併在同一列
             mergedRows.push(createMergedRow(bItem, eItem));
             bIdx++; eIdx++;
           } else {
-            // 時間差不足，E 欄獨立成列，B 欄往下等待下一個 E
             mergedRows.push(createMergedRow(null, eItem));
             eIdx++;
           }
-
         } else if (bItem) {
           mergedRows.push(createMergedRow(bItem, null));
           bIdx++;
@@ -743,38 +728,65 @@
         }
       }
 
-      // ==============================================
-      // 3. 組裝最終表格 (結合 加車前 + 錯位區 + 加車後)
-      // ==============================================
       let displayRows = [];
-      
-      // 加入區間前的原始資料
       for (let i = 0; i < segStart; i++) {
         let r = rawList[i];
         displayRows.push({
           c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
           newETime: "", e: r.e, f: r.f,
           isBModified: false, isEModified: false,
-          isAnchorB: bAnchors.includes(i), isAnchorE: eAnchors.includes(i),
-          inBRange: isInsideRange(i, bEarly, bLate) && !bAnchors.includes(i),
-          inERange: isInsideRange(i, eEarly, eLate) && !eAnchors.includes(i)
+          isAnchorB: false, isAnchorE: false, inBRange: false, inERange: false
         });
       }
 
-      // 貼上經過引擎配對好的錯位區
       displayRows = displayRows.concat(mergedRows);
 
-      // 加入區間後的原始資料 (100% 回歸原表對齊，絕不吞噬)
       for (let i = segEnd + 1; i < rawList.length; i++) {
         let r = rawList[i];
         displayRows.push({
           c: r.c, newBTime: "", b: r.b, d: r.d, g: r.g,
           newETime: "", e: r.e, f: r.f,
           isBModified: false, isEModified: false,
-          isAnchorB: bAnchors.includes(i), isAnchorE: eAnchors.includes(i),
-          inBRange: isInsideRange(i, bEarly, bLate) && !bAnchors.includes(i),
-          inERange: isInsideRange(i, eEarly, eLate) && !eAnchors.includes(i)
+          isAnchorB: false, isAnchorE: false, inBRange: false, inERange: false
         });
+      }
+
+      // 動態重新尋標：尋找最接近且 <= 原錨點時間 的位置作為新錨點
+      function findNewAnchor(Ta, col) {
+        if (Ta === null || isNaN(Ta)) return null;
+        let bestIdx = -1;
+        let bestDiff = Infinity;
+        for (let i = 0; i < displayRows.length; i++) {
+          let t = timeToSeconds(displayRows[i][col]);
+          if (!isNaN(t)) {
+            let diff = Ta - t;
+            if (diff >= 0 && diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = i;
+            }
+          }
+        }
+        return bestIdx !== -1 ? bestIdx : null;
+      }
+
+      let newBIndices = bOrigTimes.map(Ta => findNewAnchor(Ta, 'b'));
+      let newEIndices = eOrigTimes.map(Ta => findNewAnchor(Ta, 'e'));
+
+      newBIndices.forEach(idx => { if (idx !== null) displayRows[idx].isAnchorB = true; });
+      newEIndices.forEach(idx => { if (idx !== null) displayRows[idx].isAnchorE = true; });
+
+      let nBEarly = makeRange(newBIndices[0], newBIndices[1]);
+      let nBLate  = makeRange(newBIndices[2], newBIndices[3]);
+      let nEEarly = makeRange(newEIndices[0], newEIndices[1]);
+      let nELate  = makeRange(newEIndices[2], newEIndices[3]);
+
+      for (let i = 0; i < displayRows.length; i++) {
+        if (!displayRows[i].isAnchorB) {
+          displayRows[i].inBRange = isInsideRange(i, nBEarly, nBLate);
+        }
+        if (!displayRows[i].isAnchorE) {
+          displayRows[i].inERange = isInsideRange(i, nEEarly, nELate);
+        }
       }
 
       renderRows(displayRows);
@@ -817,10 +829,8 @@
       updateTable();
     });
 
-    // === 防誤觸上傳確認視窗邏輯 ===
     const confirmModal = document.getElementById("confirmModal");
 
-    // 1. 點擊「上傳至試算表」按鈕 -> 跳出確認視窗
     document.getElementById("btnUpload").addEventListener("click", () => {
       if (!currentExportData || currentExportData.length === 0) {
         alert("目前沒有資料可以上傳！");
@@ -829,12 +839,10 @@
       confirmModal.style.display = "flex";
     });
 
-    // 2. 點擊「取消上傳」按鈕 -> 關閉視窗，不做任何動作
     document.getElementById("btnCancelUpload").addEventListener("click", () => {
       confirmModal.style.display = "none";
     });
 
-    // 3. 點擊「確定上傳」按鈕 -> 關閉視窗，正式執行上傳
     document.getElementById("btnConfirmUpload").addEventListener("click", async () => {
       confirmModal.style.display = "none";
 
