@@ -102,6 +102,21 @@
       cursor: not-allowed;
     }
 
+    /* 微調提示條 */
+    .edit-hint {
+      width: 100%;
+      max-width: 1320px;
+      margin: -6px 0 12px 0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      color: #93c5fd;
+      font-size: 13px;
+      text-align: center;
+      display: none;
+    }
+
     /* 看板表格容器 */
     #board-container {
       background: #ffffff;
@@ -201,6 +216,49 @@
       font-size: 15px;
     }
 
+    /* 更動區間內可長按微調之班型(D)與姓名(G) */
+    td.cell-editable-dg {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      transition: background-color 0.15s, box-shadow 0.15s;
+    }
+    td.cell-editable-dg.has-content {
+      cursor: grab;
+      background-color: #f8fafc;
+      box-shadow: inset 0 0 0 1px #cbd5e1;
+    }
+    td.cell-editable-dg.has-content:hover {
+      background-color: #e0f2fe;
+      box-shadow: inset 0 0 0 1px #38bdf8;
+    }
+    td.cell-drop-slot {
+      background-color: #fef3c7 !important;
+      color: #b45309 !important;
+      font-weight: bold;
+      box-shadow: inset 0 0 0 2px #f59e0b !important;
+    }
+
+    /* 跟隨滑鼠或手指的懸浮卡片 */
+    .drag-ghost-pill {
+      position: fixed;
+      z-index: 10000;
+      pointer-events: none;
+      background-color: #1e293b;
+      color: #fbbf24;
+      border: 2px solid #f59e0b;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+      white-space: nowrap;
+      transform: translate(-50%, -50%);
+    }
+    .drag-ghost-pill.is-touch {
+      transform: translate(-50%, -140%);
+    }
+
     /* 防誤觸確認視窗 */
     .modal-overlay {
       position: fixed;
@@ -285,6 +343,10 @@
     <button type="button" class="btn-action btn-reset" id="btnReset">清除重設</button>
     <button type="button" class="btn-action btn-apply" id="btnApply">套用加車計算</button>
     <button type="button" class="btn-action btn-upload" id="btnUpload">上傳至試算表</button>
+  </div>
+
+  <div id="editHint" class="edit-hint">
+    💡 提示：更動區間內的「班型＋姓名」可長按約 0.3 秒取下並上下拖曳調整位置（其餘班次自動遞補）
   </div>
 
   <div id="board-container">
@@ -704,7 +766,7 @@
           let isBInside = isTimeInAnchor(bSec, bOrigTimes);
           let isEInside = isTimeInAnchor(eSec, eOrigTimes);
           
-          let thresholdSec = 660; // 都在外：11 分鐘
+          let thresholdSec = 630; // 都在外：10 分 30 秒
           if (isBInside && isEInside) thresholdSec = 270; // 都在內：4.5 分鐘
           else if (isBInside || isEInside) thresholdSec = 420; // 一內一外：7 分鐘
 
@@ -792,27 +854,325 @@
       renderRows(displayRows);
     }
 
+    // 取得更動區間（包含區間內穿插的純 B 欄或純 E 欄列）
+    function getEditableZones(rows) {
+      let bMin = Infinity, bMax = -1;
+      let eMin = Infinity, eMax = -1;
+      rows.forEach((r, idx) => {
+        if (r.isBModified) {
+          if (idx < bMin) bMin = idx;
+          if (idx > bMax) bMax = idx;
+        }
+        if (r.isEModified) {
+          if (idx < eMin) eMin = idx;
+          if (idx > eMax) eMax = idx;
+        }
+      });
+      const zones = [];
+      if (bMax >= bMin) zones.push({ start: bMin, end: bMax });
+      if (eMax >= eMin) zones.push({ start: eMin, end: eMax });
+      if (zones.length === 2) {
+        zones.sort((a, b) => a.start - b.start);
+        if (zones[1].start <= zones[0].end + 1) {
+          return [{ start: zones[0].start, end: Math.max(zones[0].end, zones[1].end) }];
+        }
+      }
+      return zones;
+    }
+
+    // 長按拖曳狀態管理（支援桌機滑鼠與手機／平板觸控）
+    let pressTimer = null;
+    let pendingPress = null;
+    let dragState = {
+      active: false,
+      pointerId: null,
+      isTouch: false,
+      zoneStart: -1,
+      zoneEnd: -1,
+      origIdx: -1,
+      currentIdx: -1,
+      draggedD: "",
+      draggedG: "",
+      basePairs: [],
+      ghostEl: null,
+      lastClientY: 0,
+      scrollRaf: null
+    };
+
+    function clearPendingPress() {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+      pendingPress = null;
+    }
+
+    function computePreviewPairs(targetIdx) {
+      const pairs = dragState.basePairs.map(p => ({ ...p }));
+      const fromOffset = dragState.origIdx - dragState.zoneStart;
+      const toOffset = targetIdx - dragState.zoneStart;
+      const [moved] = pairs.splice(fromOffset, 1);
+      pairs.splice(toOffset, 0, moved);
+      return pairs;
+    }
+
+    function updateDragPreview(targetIdx) {
+      const tbody = document.getElementById("tableBody");
+      const previewPairs = computePreviewPairs(targetIdx);
+      for (let rIdx = dragState.zoneStart; rIdx <= dragState.zoneEnd; rIdx++) {
+        const tr = tbody.children[rIdx];
+        if (!tr) continue;
+        const dCell = tr.querySelector(".col-d");
+        const gCell = tr.querySelector(".col-g");
+        const item = previewPairs[rIdx - dragState.zoneStart];
+        if (dCell && gCell && item) {
+          dCell.textContent = item.d;
+          gCell.textContent = item.g;
+          const isTarget = rIdx === targetIdx;
+          dCell.classList.toggle("cell-drop-slot", isTarget);
+          gCell.classList.toggle("cell-drop-slot", isTarget);
+        }
+      }
+    }
+
+    function findTargetRowInZone(clientY) {
+      const tbody = document.getElementById("tableBody");
+      let chosenIdx = dragState.currentIdx;
+      for (let rIdx = dragState.zoneStart; rIdx <= dragState.zoneEnd; rIdx++) {
+        const tr = tbody.children[rIdx];
+        if (!tr) continue;
+        const rect = tr.getBoundingClientRect();
+        if (clientY >= rect.top && clientY <= rect.bottom) {
+          return rIdx;
+        }
+      }
+      const firstTr = tbody.children[dragState.zoneStart];
+      const lastTr = tbody.children[dragState.zoneEnd];
+      if (firstTr && clientY < firstTr.getBoundingClientRect().top) {
+        chosenIdx = dragState.zoneStart;
+      } else if (lastTr && clientY > lastTr.getBoundingClientRect().bottom) {
+        chosenIdx = dragState.zoneEnd;
+      }
+      return chosenIdx;
+    }
+
+    function startAutoScrollLoop() {
+      const container = document.getElementById("board-container");
+      function step() {
+        if (!dragState.active) return;
+        const rect = container.getBoundingClientRect();
+        const edge = 46;
+        let delta = 0;
+        if (dragState.lastClientY < rect.top + edge) {
+          delta = -8;
+        } else if (dragState.lastClientY > rect.bottom - edge) {
+          delta = 8;
+        }
+        if (delta !== 0) {
+          container.scrollTop += delta;
+          const newTarget = findTargetRowInZone(dragState.lastClientY);
+          if (newTarget !== dragState.currentIdx) {
+            dragState.currentIdx = newTarget;
+            updateDragPreview(newTarget);
+          }
+        }
+        dragState.scrollRaf = requestAnimationFrame(step);
+      }
+      dragState.scrollRaf = requestAnimationFrame(step);
+    }
+
+    function finishDrag(commit) {
+      if (!dragState.active) return;
+      if (dragState.scrollRaf) {
+        cancelAnimationFrame(dragState.scrollRaf);
+        dragState.scrollRaf = null;
+      }
+      if (dragState.ghostEl) {
+        dragState.ghostEl.remove();
+        dragState.ghostEl = null;
+      }
+      document.getElementById("board-container").style.touchAction = "";
+      document.body.style.userSelect = "";
+
+      if (commit) {
+        const finalPairs = computePreviewPairs(dragState.currentIdx);
+        for (let rIdx = dragState.zoneStart; rIdx <= dragState.zoneEnd; rIdx++) {
+          const item = finalPairs[rIdx - dragState.zoneStart];
+          if (currentExportData[rIdx] && item) {
+            currentExportData[rIdx].d = item.d;
+            currentExportData[rIdx].g = item.g;
+          }
+        }
+      }
+
+      dragState.active = false;
+      dragState.pointerId = null;
+      renderRows(currentExportData);
+    }
+
+    function startLongPressDrag(info) {
+      const { rowIdx, zone, clientX, clientY, pointerId, isTouch } = info;
+      const row = currentExportData[rowIdx];
+      if (!row || (!row.d && !row.g)) return;
+
+      if (navigator.vibrate) {
+        try { navigator.vibrate(25); } catch (_) {}
+      }
+
+      const basePairs = [];
+      for (let i = zone.start; i <= zone.end; i++) {
+        basePairs.push({
+          d: currentExportData[i].d || "",
+          g: currentExportData[i].g || ""
+        });
+      }
+
+      const ghost = document.createElement("div");
+      ghost.className = "drag-ghost-pill" + (isTouch ? " is-touch" : "");
+      const labelD = row.d || "(無班型)";
+      const labelG = row.g || "(無姓名)";
+      ghost.textContent = `${labelD} ｜ ${labelG}`;
+      ghost.style.left = clientX + "px";
+      ghost.style.top = clientY + "px";
+      document.body.appendChild(ghost);
+
+      document.getElementById("board-container").style.touchAction = "none";
+      document.body.style.userSelect = "none";
+
+      dragState = {
+        active: true,
+        pointerId,
+        isTouch,
+        zoneStart: zone.start,
+        zoneEnd: zone.end,
+        origIdx: rowIdx,
+        currentIdx: rowIdx,
+        draggedD: row.d || "",
+        draggedG: row.g || "",
+        basePairs,
+        ghostEl: ghost,
+        lastClientY: clientY,
+        scrollRaf: null
+      };
+
+      updateDragPreview(rowIdx);
+      startAutoScrollLoop();
+    }
+
+    window.addEventListener("pointermove", (e) => {
+      if (pendingPress && e.pointerId === pendingPress.pointerId) {
+        const dist = Math.hypot(e.clientX - pendingPress.startX, e.clientY - pendingPress.startY);
+        if (dist > 8) {
+          clearPendingPress();
+        } else {
+          pendingPress.clientX = e.clientX;
+          pendingPress.clientY = e.clientY;
+        }
+      }
+
+      if (dragState.active && e.pointerId === dragState.pointerId) {
+        e.preventDefault();
+        if (dragState.ghostEl) {
+          dragState.ghostEl.style.left = e.clientX + "px";
+          dragState.ghostEl.style.top = e.clientY + "px";
+        }
+        dragState.lastClientY = e.clientY;
+        const targetIdx = findTargetRowInZone(e.clientY);
+        if (targetIdx !== dragState.currentIdx) {
+          dragState.currentIdx = targetIdx;
+          updateDragPreview(targetIdx);
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener("pointerup", (e) => {
+      if (pendingPress && e.pointerId === pendingPress.pointerId) {
+        clearPendingPress();
+      }
+      if (dragState.active && e.pointerId === dragState.pointerId) {
+        finishDrag(true);
+      }
+    });
+
+    window.addEventListener("pointercancel", (e) => {
+      if (pendingPress && e.pointerId === pendingPress.pointerId) {
+        clearPendingPress();
+      }
+      if (dragState.active && e.pointerId === dragState.pointerId) {
+        finishDrag(false);
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && dragState.active) {
+        finishDrag(false);
+      }
+    });
+
     function renderRows(rows) {
       currentExportData = rows; 
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
 
-      rows.forEach(r => {
+      const zones = getEditableZones(rows);
+      const editHint = document.getElementById("editHint");
+      if (editHint) {
+        editHint.style.display = zones.length > 0 ? "block" : "none";
+      }
+
+      rows.forEach((r, idx) => {
         const tr = document.createElement("tr");
+        const zone = zones.find(z => idx >= z.start && idx <= z.end);
 
         let bClass = r.isAnchorB ? "time-anchor" : r.isBModified ? "cell-modified-b" : r.inBRange ? "cell-b-range" : "";
         let eClass = r.isAnchorE ? "time-anchor" : r.isEModified ? "cell-modified-e" : r.inERange ? "cell-e-range" : "";
+
+        const hasDG = Boolean(r.d || r.g);
+        const dgExtraClass = zone ? ("cell-editable-dg" + (hasDG ? " has-content" : "")) : "";
 
         tr.innerHTML = `
           <td>${r.c}</td>
           <td class="cell-audit">${r.newBTime}</td>
           <td class="${bClass}">${r.b}</td>
-          <td>${r.d}</td>
-          <td>${r.g}</td>
+          <td class="col-d ${dgExtraClass}">${r.d}</td>
+          <td class="col-g ${dgExtraClass}">${r.g}</td>
           <td class="cell-audit">${r.newETime}</td>
           <td class="${eClass}">${r.e}</td>
           <td>${r.f}</td>
         `;
+
+        if (zone) {
+          const dCell = tr.querySelector(".col-d");
+          const gCell = tr.querySelector(".col-g");
+          [dCell, gCell].forEach(cell => {
+            cell.addEventListener("contextmenu", (ev) => ev.preventDefault());
+            cell.addEventListener("pointerdown", (ev) => {
+              if (ev.pointerType === "mouse" && ev.button !== 0) return;
+              const curRow = currentExportData[idx];
+              if (!curRow || (!curRow.d && !curRow.g)) return;
+
+              clearPendingPress();
+              pendingPress = {
+                rowIdx: idx,
+                zone,
+                pointerId: ev.pointerId,
+                isTouch: ev.pointerType === "touch" || ev.pointerType === "pen",
+                startX: ev.clientX,
+                startY: ev.clientY,
+                clientX: ev.clientX,
+                clientY: ev.clientY
+              };
+              pressTimer = setTimeout(() => {
+                if (pendingPress) {
+                  const info = pendingPress;
+                  clearPendingPress();
+                  startLongPressDrag(info);
+                }
+              }, 300);
+            });
+          });
+        }
+
         tbody.appendChild(tr);
       });
     }
