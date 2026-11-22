@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>當天車輛調度看板 (精確至秒)</title>
   <style>
     * { box-sizing: border-box; }
@@ -24,20 +25,84 @@
     /* 頂部控制面板 */
     .control-panel {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      flex-direction: column;
+      gap: 6px;
       background-color: #262a34;
-      padding: 12px 18px;
+      padding: 8px 16px;
       border-radius: 8px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       width: 100%;
       max-width: 1320px;
+    }
+    .panel-top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #334155;
+    }
+    .mode-switch {
+      display: inline-flex;
+      background-color: #1a1b1e;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .mode-btn {
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    .mode-btn.active {
+      background-color: #2563eb;
+      color: #ffffff;
+    }
+    .panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-rows {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
       justify-content: center;
       align-items: center;
     }
+    .panel-rows.hidden {
+      display: none;
+    }
+    .manual-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      background-color: #1e222b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 6px 12px;
+      width: 100%;
+      font-size: 13px;
+    }
+    .station-tag {
+      color: #f87171;
+      font-weight: bold;
+      font-size: 13px;
+    }
     .panel-group {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
       font-size: 13px;
@@ -50,7 +115,7 @@
       font-weight: bold;
     }
     .badge-e {
-      background-color: #16a34a;
+      background-color: #92400e;
       color: #ffffff;
       padding: 4px 10px;
       border-radius: 5px;
@@ -68,9 +133,242 @@
     select:focus, input:focus {
       border-color: #3b82f6;
     }
+    select.native-select-hidden {
+      display: none;
+    }
+    .custom-select {
+      position: relative;
+      display: inline-block;
+      min-width: 150px;
+    }
+    .custom-select-trigger {
+      width: 100%;
+      background-color: #333846;
+      border: 1px solid #4b5563;
+      color: #ffffff;
+      padding: 4px 26px 4px 8px;
+      border-radius: 5px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      position: relative;
+      line-height: 1.25;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .custom-select-trigger:hover,
+    .custom-select.open .custom-select-trigger {
+      border-color: #3b82f6;
+    }
+    .custom-select-trigger::after {
+      content: "▾";
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 11px;
+    }
+    .custom-select-sub {
+      display: block;
+      font-size: 11px;
+      color: #93c5fd;
+    }
+    .custom-select-sub.is-e {
+      color: #fdba74;
+    }
+    .custom-select-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      min-width: 185px;
+      max-height: 280px;
+      overflow-y: auto;
+      background-color: #262a34;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.55);
+      z-index: 2000;
+      display: none;
+      padding: 3px;
+    }
+    .custom-select.open .custom-select-menu {
+      display: block;
+    }
+    .custom-select-option {
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .custom-select-option:hover {
+      background-color: #334155;
+    }
+    .custom-select-option.selected {
+      background-color: #1d4ed8;
+    }
+    .custom-select-option.selected.is-e {
+      background-color: #92400e;
+    }
+    .cs-line1 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .cs-line2 {
+      font-size: 11px;
+      color: #93c5fd;
+    }
+    .cs-line2.is-e {
+      color: #fdba74;
+    }
+    .custom-select-option.selected .cs-line2 {
+      color: #e2e8f0;
+    }
     input[type="number"] {
       width: 65px;
       text-align: center;
+    }
+    input.time-input {
+      width: 96px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.5px;
+    }
+    input.time-input.invalid {
+      border-color: #ef4444;
+      background-color: #451a1a;
+    }
+    .manual-row-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .manual-row-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding-bottom: 5px;
+      border-bottom: 1px dashed #334155;
+    }
+    .manual-times-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .manual-time-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .manual-section-badge {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .manual-time-idx {
+      color: #94a3b8;
+      min-width: 48px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .manual-time-label {
+      white-space: nowrap;
+    }
+    select.hms-select {
+      width: 62px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      padding: 4px 4px;
+    }
+    select.hms-select.invalid {
+      border-color: #ef4444;
+      background-color: #451a1a;
+    }
+    .hms-colon {
+      color: #94a3b8;
+      font-weight: bold;
+    }
+    .row-calc-badge {
+      font-size: 12px;
+      color: #93c5fd;
+      font-variant-numeric: tabular-nums;
+      margin-left: 4px;
+    }
+    .row-calc-badge.is-e {
+      color: #fdba74;
+    }
+    .row-calc-badge.is-error {
+      color: #fca5a5;
+    }
+    .btn-del-row {
+      background-color: #475569;
+      color: #e2e8f0;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-del-row:hover {
+      background-color: #ef4444;
+      color: #ffffff;
+    }
+    .manual-row-bottom {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-add-row {
+      background-color: #334155;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 5px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-add-row:hover {
+      background-color: #2563eb;
+      border-color: #3b82f6;
+    }
+    .btn-add-row.is-e:hover {
+      background-color: #92400e;
+      border-color: #b45309;
+    }
+    .calc-preview {
+      font-size: 12px;
+      color: #93c5fd;
+      background-color: #172033;
+      border: 1px solid #2b3a55;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .calc-preview.is-e {
+      color: #fdba74;
+      background-color: #29180d;
+      border-color: #6b3b18;
+    }
+    .calc-preview.is-error {
+      color: #fca5a5;
+      background-color: #3b1818;
+      border-color: #7f1d1d;
+    }
+    .range-divider {
+      color: #64748b;
+      margin: 0 2px;
     }
     .btn-action {
       border: none;
@@ -90,9 +388,8 @@
       color: #ffffff;
     }
     .btn-upload {
-      background-color: #10b981; 
+      background-color: #10b981;
       color: #ffffff;
-      margin-left: auto; 
     }
     .btn-action:hover {
       opacity: 0.85;
@@ -158,7 +455,7 @@
       min-width: 100px;
     }
     th.th-green, tr.sub-header th.th-green {
-      background-color: #15803d;
+      background-color: #92400e;
       min-width: 100px;
     }
 
@@ -201,9 +498,9 @@
       background-color: #eff6ff;
     }
     .cell-modified-e {
-      color: #15803d;
+      color: #78350f;
       font-weight: bold;
-      background-color: #f0fdf4;
+      background-color: #ffedd5;
     }
     .cell-audit {
       color: #64748b;
@@ -241,10 +538,10 @@
     }
     td.cell-editable-e.has-content {
       cursor: grab;
-      box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(146, 64, 14, 0.35);
     }
     td.cell-editable-e.has-content:hover {
-      box-shadow: inset 0 0 0 1.5px #16a34a;
+      box-shadow: inset 0 0 0 1.5px #92400e;
     }
     td.cell-drop-slot {
       background-color: #fef3c7 !important;
@@ -273,7 +570,7 @@
       transform: translate(-50%, -140%);
     }
 
-    /* 防誤觸確認視窗 */
+    /* 防誤觸確認視窗與頁內提示視窗 */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -294,6 +591,7 @@
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
       text-align: center;
       min-width: 300px;
+      max-width: 90vw;
     }
     .modal-title {
       font-size: 18px;
@@ -327,6 +625,26 @@
       background-color: #4b5563;
       color: #ffffff;
     }
+
+    /* 頁內訊息提示條 (Toast) */
+    .toast-banner {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 10001;
+      background-color: #1e293b;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-left: 4px solid #3b82f6;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+      max-width: 380px;
+      display: none;
+    }
+    .toast-banner.success { border-left-color: #10b981; }
+    .toast-banner.error { border-left-color: #ef4444; }
   </style>
 </head>
 <body>
@@ -334,29 +652,83 @@
   <h2>當天車輛調度看板 (精確至秒)</h2>
 
   <div class="control-panel">
-    <div class="panel-group">
-      <span class="badge-b">B 欄加車</span>
-      <label>起始：</label>
-      <select id="bStart"><option value="">--請選擇--</option></select>
-      <label>結束：</label>
-      <select id="bEnd"><option value="">--請選擇--</option></select>
-      <label>發車數量：</label>
-      <input type="number" id="bCount" value="" min="1" placeholder="台數">
+    <div class="panel-top-bar">
+      <div class="panel-group">
+        <span>輸入方式：</span>
+        <div class="mode-switch" role="tablist">
+          <button type="button" class="mode-btn active" id="btnModeSelect">選取模式</button>
+          <button type="button" class="mode-btn" id="btnModeManual">手動輸入模式</button>
+        </div>
+      </div>
+
+      <div class="panel-actions">
+        <button type="button" class="btn-action btn-reset" id="btnReset">清除重設</button>
+        <button type="button" class="btn-action btn-apply" id="btnApply">套用加車計算</button>
+        <button type="button" class="btn-action btn-upload" id="btnUpload">上傳至試算表</button>
+      </div>
     </div>
 
-    <div class="panel-group">
-      <span class="badge-e">E 欄加車</span>
-      <label>起始：</label>
-      <select id="eStart"><option value="">--請選擇--</option></select>
-      <label>結束：</label>
-      <select id="eEnd"><option value="">--請選擇--</option></select>
-      <label>發車數量：</label>
-      <input type="number" id="eCount" value="" min="1" placeholder="台數">
+    <!-- 模式一：原本下拉選取模式 -->
+    <div id="selectModePanel" class="panel-rows">
+      <div class="panel-group">
+        <span class="badge-b">B 欄加車</span>
+        <label>起始：</label>
+        <select id="bStart"><option value="">--請選擇--</option></select>
+        <label>結束：</label>
+        <select id="bEnd"><option value="">--請選擇--</option></select>
+        <label>發車數量：</label>
+        <input type="number" id="bCount" value="" min="1" placeholder="台數">
+      </div>
+
+      <div class="panel-group">
+        <span class="badge-e">E 欄加車</span>
+        <label>起始：</label>
+        <select id="eStart"><option value="">--請選擇--</option></select>
+        <label>結束：</label>
+        <select id="eEnd"><option value="">--請選擇--</option></select>
+        <label>發車數量：</label>
+        <input type="number" id="eCount" value="" min="1" placeholder="台數">
+      </div>
     </div>
 
-    <button type="button" class="btn-action btn-reset" id="btnReset">清除重設</button>
-    <button type="button" class="btn-action btn-apply" id="btnApply">套用加車計算</button>
-    <button type="button" class="btn-action btn-upload" id="btnUpload">上傳至試算表</button>
+    <!-- 模式二：上方選對應原表區間 + 下方下拉選擇 (時):(分):(秒) 與新增一列時間 -->
+    <div id="manualModePanel" class="panel-rows hidden">
+      <div class="manual-row">
+        <div class="manual-row-col">
+          <div class="manual-row-top">
+            <span class="station-tag">劍南路/大直</span>
+            <label>對應原表起始：</label>
+            <select id="bRangeStart"><option value="">--請選擇--</option></select>
+            <label>對應原表結束：</label>
+            <select id="bRangeEnd"><option value="">--請選擇--</option></select>
+          </div>
+          <div class="manual-section-badge"><span class="badge-b">B 欄（方向2｜展覽館）</span></div>
+          <div id="bManualList" class="manual-times-list"></div>
+          <div class="manual-row-bottom">
+            <button type="button" class="btn-add-row" id="btnAddBTime">＋ 新增一列時間</button>
+            <span id="bManualPreview" class="calc-preview">外 +16分 / 內 +18分40秒（直接依新增列數計算加入）</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="manual-row">
+        <div class="manual-row-col">
+          <div class="manual-row-top">
+            <span class="station-tag">中山國中/松基</span>
+            <label>對應原表起始：</label>
+            <select id="eRangeStart"><option value="">--請選擇--</option></select>
+            <label>對應原表結束：</label>
+            <select id="eRangeEnd"><option value="">--請選擇--</option></select>
+          </div>
+          <div class="manual-section-badge"><span class="badge-e">E 欄（方向1｜動物園）</span></div>
+          <div id="eManualList" class="manual-times-list"></div>
+          <div class="manual-row-bottom">
+            <button type="button" class="btn-add-row is-e" id="btnAddETime">＋ 新增一列時間</button>
+            <span id="eManualPreview" class="calc-preview is-e">外 +21分 / 內 +24分（直接依新增列數計算加入）</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="editHint" class="edit-hint">
@@ -402,12 +774,15 @@
     </div>
   </div>
 
+  <div id="toastBanner" class="toast-banner"></div>
+
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbxMkTahf3GyuECOhpIeWDrwa0H4slg6b_CDnz0qgtAKTm4FDB-PjhJShaWU0lavlDBNNA/exec";
     const UPLOAD_URL = "https://script.google.com/macros/s/AKfycbwYHT6YdVUr-ozWCRBn-owZgL6QL_pk0c2SJ1pYAz67E-XQAVYYUfg9DOyy4tg1AwJ5/exec";
 
     let rawList = [];
-    let currentExportData = []; 
+    let currentExportData = [];
+    let inputMode = "select"; // "select" | "manual"
 
     let bAnchors = [];
     let eAnchors = [];
@@ -419,7 +794,19 @@
     let eEarly = { start: null, end: null };
     let eLate  = { start: null, end: null };
 
-    // 修正：將 makeRange 放在全域範圍，供 init 與 updateTable 共同呼叫
+    let toastTimer = null;
+    function showToast(message, type = "info") {
+      const el = document.getElementById("toastBanner");
+      if (!el) return;
+      el.textContent = message;
+      el.className = "toast-banner" + (type === "success" ? " success" : type === "error" ? " error" : "");
+      el.style.display = "block";
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.style.display = "none";
+      }, 4000);
+    }
+
     function makeRange(idxA, idxB) {
       if (idxA !== null && idxB !== null) {
         return { start: Math.min(idxA, idxB), end: Math.max(idxA, idxB) };
@@ -485,6 +872,38 @@
       return `${hh}:${mm}:${ss}`;
     }
 
+    // 解析手動輸入時間（支援 HH:MM:SS、H:MM:SS、HHMMSS、HH:MM）
+    function parseManualTimeInput(raw) {
+      if (!raw) return null;
+      const s = raw.trim();
+      if (!s) return null;
+
+      let hh, mm, ss;
+      const colonMatch = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (colonMatch) {
+        hh = parseInt(colonMatch[1], 10);
+        mm = parseInt(colonMatch[2], 10);
+        ss = colonMatch[3] !== undefined ? parseInt(colonMatch[3], 10) : 0;
+      } else if (/^\d{5,6}$/.test(s)) {
+        const padded = s.padStart(6, "0");
+        hh = parseInt(padded.slice(0, 2), 10);
+        mm = parseInt(padded.slice(2, 4), 10);
+        ss = parseInt(padded.slice(4, 6), 10);
+      } else if (/^\d{3,4}$/.test(s)) {
+        const padded = s.padStart(4, "0");
+        hh = parseInt(padded.slice(0, 2), 10);
+        mm = parseInt(padded.slice(2, 4), 10);
+        ss = 0;
+      } else {
+        return NaN;
+      }
+
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) {
+        return NaN;
+      }
+      return hh * 3600 + mm * 60 + ss;
+    }
+
     function isInsideRange(idx, early, late) {
       const inEarly = early.start !== null && early.end !== null && idx > early.start && idx < early.end;
       const inLate  = late.start !== null && late.end !== null && idx > late.start && idx < late.end;
@@ -497,6 +916,154 @@
       let inE = (e1 !== null && e2 !== null) && tSec > Math.min(e1, e2) && tSec < Math.max(e1, e2);
       let inL = (l1 !== null && l2 !== null) && tSec > Math.min(l1, l2) && tSec < Math.max(l1, l2);
       return inE || inL;
+    }
+
+    // 依手動輸入時間加上錨點外/內偏移量，換算為 B 欄或 E 欄時間
+    function convertManualTime(rawStr, origTimes, outsideOffsetSec, insideOffsetSec) {
+      const rawSec = parseManualTimeInput(rawStr);
+      if (rawSec === null) return { empty: true, valid: false };
+      if (isNaN(rawSec)) return { empty: false, valid: false };
+
+      let outCandidate = (rawSec + outsideOffsetSec) % 86400;
+
+      const inAnchor = isTimeInAnchor(outCandidate, origTimes);
+      let finalSec = (rawSec + (inAnchor ? insideOffsetSec : outsideOffsetSec)) % 86400;
+
+      return {
+        empty: false,
+        valid: true,
+        rawStr: secondsToTime(rawSec),
+        timeStr: secondsToTime(finalSec),
+        timeSec: finalSec,
+        inAnchor
+      };
+    }
+
+    function buildNumberOptions(maxVal, placeholder, defaultVal = "") {
+      let html = placeholder ? `<option value="">${placeholder}</option>` : "";
+      for (let i = 0; i <= maxVal; i++) {
+        const v = String(i).padStart(2, "0");
+        const sel = (defaultVal === v) ? " selected" : "";
+        html += `<option value="${v}"${sel}>${v}</option>`;
+      }
+      return html;
+    }
+
+    function refreshManualRowNumbers(col) {
+      const isB = col === "B";
+      const listEl = document.getElementById(isB ? "bManualList" : "eManualList");
+      const items = listEl.querySelectorAll(".manual-time-item");
+      items.forEach((rowEl, idx) => {
+        const labelEl = rowEl.querySelector(".manual-time-idx");
+        if (labelEl) labelEl.textContent = `第 ${idx + 1} 台`;
+      });
+    }
+
+    function addManualTimeRow(col) {
+      const isB = col === "B";
+      const listEl = document.getElementById(isB ? "bManualList" : "eManualList");
+      const rowEl = document.createElement("div");
+      rowEl.className = "manual-time-item";
+
+      rowEl.innerHTML = `
+        <span class="manual-time-idx"></span>
+        <span class="manual-time-label">${isB ? "輸入展覽館發車時間：" : "輸入動物園發車時間："}</span>
+        <select class="hms-select hms-h" aria-label="時">${buildNumberOptions(23, "時")}</select>
+        <span class="hms-colon">:</span>
+        <select class="hms-select hms-m" aria-label="分">${buildNumberOptions(59, "分")}</select>
+        <span class="hms-colon">:</span>
+        <select class="hms-select hms-s" aria-label="秒">${buildNumberOptions(59, "", "00")}</select>
+        <button type="button" class="btn-del-row">刪除</button>
+        <span class="row-calc-badge${isB ? "" : " is-e"}"></span>
+      `;
+
+      rowEl.querySelectorAll("select").forEach(sel => {
+        sel.addEventListener("change", () => updateManualPreview(col));
+      });
+
+      rowEl.querySelector(".btn-del-row").addEventListener("click", () => {
+        if (listEl.children.length > 1) {
+          rowEl.remove();
+        } else {
+          rowEl.querySelector(".hms-h").value = "";
+          rowEl.querySelector(".hms-m").value = "";
+          rowEl.querySelector(".hms-s").value = "00";
+        }
+        refreshManualRowNumbers(col);
+        updateManualPreview(col);
+      });
+
+      listEl.appendChild(rowEl);
+      refreshManualRowNumbers(col);
+      updateManualPreview(col);
+    }
+
+    function collectManualTimeList(col) {
+      const isB = col === "B";
+      const listEl = document.getElementById(isB ? "bManualList" : "eManualList");
+      const origTimes = isB ? bOrigTimes : eOrigTimes;
+      const outSec = isB ? 16 * 60 : 21 * 60;
+      const inSec = isB ? (18 * 60 + 40) : 24 * 60;
+
+      const rows = listEl.querySelectorAll(".manual-time-item");
+      const items = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const rowEl = rows[i];
+        const hEl = rowEl.querySelector(".hms-h");
+        const mEl = rowEl.querySelector(".hms-m");
+        const sEl = rowEl.querySelector(".hms-s");
+        const badgeEl = rowEl.querySelector(".row-calc-badge");
+
+        const h = hEl.value;
+        const m = mEl.value;
+        const secVal = sEl.value || "00";
+
+        hEl.classList.remove("invalid");
+        mEl.classList.remove("invalid");
+        badgeEl.classList.remove("is-error");
+
+        if (!h && !m) {
+          badgeEl.textContent = "";
+          continue;
+        }
+        if (!h || !m) {
+          if (!h) hEl.classList.add("invalid");
+          if (!m) mEl.classList.add("invalid");
+          badgeEl.textContent = "請選完整 時:分";
+          badgeEl.classList.add("is-error");
+          return { empty: false, valid: false, errorIdx: i + 1, items: [] };
+        }
+
+        const timeStr = `${h}:${m}:${secVal}`;
+        const conv = convertManualTime(timeStr, origTimes, outSec, inSec);
+        badgeEl.textContent = `→ ${conv.timeStr} (${conv.inAnchor ? "內" : "外"})`;
+        items.push(conv);
+      }
+
+      return { empty: items.length === 0, valid: true, items };
+    }
+
+    function updateManualPreview(col) {
+      const isB = col === "B";
+      const previewEl = document.getElementById(isB ? "bManualPreview" : "eManualPreview");
+      const defaultHint = isB
+        ? "外 -16分 / 內 -18分40秒（直接依新增列數計算加入）"
+        : "外 -21分 / 內 -24分（直接依新增列數計算加入）";
+
+      const parsed = collectManualTimeList(col);
+      if (!parsed.valid) {
+        previewEl.textContent = `第 ${parsed.errorIdx} 列時間尚未選完整（請選擇 時 與 分）`;
+        previewEl.classList.add("is-error");
+        return;
+      }
+
+      previewEl.classList.remove("is-error");
+      if (parsed.empty) {
+        previewEl.textContent = defaultHint;
+      } else {
+        previewEl.textContent = `已選 ${parsed.items.length} 台車`;
+      }
     }
 
     // 錨點內端點減 150 秒算均分，只要在錨點內就加回 150 秒，外側一律不加
@@ -530,7 +1097,7 @@
       const times = [];
       for (let i = 0; i < count; i++) {
         const baseT = adjStart + i * step;
-        
+
         let inAnchor = false;
         if (i === 0) {
           inAnchor = startIn;
@@ -615,10 +1182,15 @@
         bOrigTimes = [bIdx26, bIdx27, bIdx34, bIdx35].map(idx => (idx !== null && rawList[idx]) ? timeToSeconds(rawList[idx].b) : null);
         eOrigTimes = [eIdx26, eIdx27, eIdx34, eIdx35].map(idx => (idx !== null && rawList[idx]) ? timeToSeconds(rawList[idx].e) : null);
 
-        populateDropdown("bStart", bTimesSet);
-        populateDropdown("bEnd", bTimesSet);
-        populateDropdown("eStart", eTimesSet);
-        populateDropdown("eEnd", eTimesSet);
+        populateDropdown("bStart", bTimesSet, "B");
+        populateDropdown("bEnd", bTimesSet, "B");
+        populateDropdown("eStart", eTimesSet, "E");
+        populateDropdown("eEnd", eTimesSet, "E");
+
+        populateDropdown("bRangeStart", bTimesSet, "B");
+        populateDropdown("bRangeEnd", bTimesSet, "B");
+        populateDropdown("eRangeStart", eTimesSet, "E");
+        populateDropdown("eRangeEnd", eTimesSet, "E");
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("dataTable").style.display = "table";
@@ -630,8 +1202,60 @@
       }
     }
 
-    function populateDropdown(elemId, timeSet) {
+    function getReverseTimeInfo(timeStr, col) {
+      const isB = col === "B";
+      const origTimes = isB ? bOrigTimes : eOrigTimes;
+      const sec = timeToSeconds(timeStr);
+      const inAnchor = isTimeInAnchor(sec, origTimes);
+      const offsetSec = isB
+        ? (inAnchor ? (18 * 60 + 30) : (16 * 60))
+        : (inAnchor ? (24 * 60) : (21 * 60));
+      let revSec = sec - offsetSec;
+      if (revSec < 0) revSec += 86400;
+      const offsetText = isB
+        ? (inAnchor ? "展覽館內18分30秒" : "展覽館外16")
+        : (inAnchor ? "動物園內24" : "動物園外21");
+      return {
+        revStr: secondsToTime(revSec),
+        inAnchor,
+        offsetText
+      };
+    }
+
+    function syncCustomSelectUI(elemId) {
       const select = document.getElementById(elemId);
+      if (!select || !select._customWrap) return;
+      const wrap = select._customWrap;
+      const trigger = wrap.querySelector(".custom-select-trigger");
+      const menu = wrap.querySelector(".custom-select-menu");
+      const col = select.dataset.col || "B";
+      const isE = col === "E";
+      const val = select.value;
+
+      if (!val) {
+        trigger.innerHTML = '<span>--請選擇--</span>';
+      } else {
+        const info = getReverseTimeInfo(val, col);
+        trigger.innerHTML = `<span>${val}</span><span class="custom-select-sub${isE ? " is-e" : ""}">${info.revStr}（${info.offsetText}）</span>`;
+      }
+
+      menu.querySelectorAll(".custom-select-option").forEach(optEl => {
+        optEl.classList.toggle("selected", optEl.dataset.value === val);
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll(".custom-select.open").forEach(wrap => {
+        if (!wrap.contains(e.target)) {
+          wrap.classList.remove("open");
+        }
+      });
+    });
+
+    function populateDropdown(elemId, timeSet, col = "B") {
+      const select = document.getElementById(elemId);
+      select.dataset.col = col;
+      select.classList.add("native-select-hidden");
       select.innerHTML = '<option value="">--請選擇--</option>';
       timeSet.forEach(t => {
         const opt = document.createElement("option");
@@ -639,6 +1263,60 @@
         opt.textContent = t;
         select.appendChild(opt);
       });
+
+      let wrap = select._customWrap;
+      if (!wrap) {
+        wrap = document.createElement("div");
+        wrap.className = "custom-select";
+        wrap.innerHTML = `
+          <button type="button" class="custom-select-trigger">--請選擇--</button>
+          <div class="custom-select-menu"></div>
+        `;
+        select.parentNode.insertBefore(wrap, select.nextSibling);
+        select._customWrap = wrap;
+
+        const trigger = wrap.querySelector(".custom-select-trigger");
+        trigger.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const wasOpen = wrap.classList.contains("open");
+          document.querySelectorAll(".custom-select.open").forEach(w => w.classList.remove("open"));
+          if (!wasOpen) wrap.classList.add("open");
+        });
+      }
+
+      const menu = wrap.querySelector(".custom-select-menu");
+      const isE = col === "E";
+      menu.innerHTML = "";
+
+      const emptyOpt = document.createElement("div");
+      emptyOpt.className = "custom-select-option";
+      emptyOpt.dataset.value = "";
+      emptyOpt.innerHTML = `<span class="cs-line1">--請選擇--</span>`;
+      emptyOpt.addEventListener("click", () => {
+        select.value = "";
+        syncCustomSelectUI(elemId);
+        wrap.classList.remove("open");
+      });
+      menu.appendChild(emptyOpt);
+
+      timeSet.forEach(t => {
+        const info = getReverseTimeInfo(t, col);
+        const optEl = document.createElement("div");
+        optEl.className = "custom-select-option" + (isE ? " is-e" : "");
+        optEl.dataset.value = t;
+        optEl.innerHTML = `
+          <span class="cs-line1">${t}</span>
+          <span class="cs-line2${isE ? " is-e" : ""}">${info.revStr}（${info.offsetText}）</span>
+        `;
+        optEl.addEventListener("click", () => {
+          select.value = t;
+          syncCustomSelectUI(elemId);
+          wrap.classList.remove("open");
+        });
+        menu.appendChild(optEl);
+      });
+
+      syncCustomSelectUI(elemId);
     }
 
     function createMergedRow(bItem, eItem) {
@@ -708,16 +1386,61 @@
     }
 
     function updateTable() {
-      const bStart = document.getElementById("bStart").value;
-      const bEnd = document.getElementById("bEnd").value;
-      const bCount = parseInt(document.getElementById("bCount").value, 10);
+      let bRangeStart = "", bRangeEnd = "";
+      let eRangeStart = "", eRangeEnd = "";
+      let bManualList = null;
+      let eManualList = null;
+      let bCount = NaN;
+      let eCount = NaN;
 
-      const eStart = document.getElementById("eStart").value;
-      const eEnd = document.getElementById("eEnd").value;
-      const eCount = parseInt(document.getElementById("eCount").value, 10);
+      if (inputMode === "select") {
+        bRangeStart = document.getElementById("bStart").value;
+        bRangeEnd   = document.getElementById("bEnd").value;
+        bCount = parseInt(document.getElementById("bCount").value, 10);
 
-      const hasB = Boolean(bStart && bEnd && bCount > 0);
-      const hasE = Boolean(eStart && eEnd && eCount > 0);
+        eRangeStart = document.getElementById("eStart").value;
+        eRangeEnd   = document.getElementById("eEnd").value;
+        eCount = parseInt(document.getElementById("eCount").value, 10);
+      } else {
+        const bParsed = collectManualTimeList("B");
+        bRangeStart = document.getElementById("bRangeStart").value;
+        bRangeEnd   = document.getElementById("bRangeEnd").value;
+
+        if (!bParsed.valid) {
+          showToast(`B 欄第 ${bParsed.errorIdx} 列時間尚未選完整（請選擇 時 與 分）`, "error");
+          return;
+        }
+        if (!bParsed.empty) {
+          if (!bRangeStart || !bRangeEnd) {
+            showToast("請在 B 欄選擇「對應原表起始」與「對應原表結束」", "error");
+            return;
+          }
+          bManualList = bParsed.items.map(it => it.timeStr);
+        }
+
+        const eParsed = collectManualTimeList("E");
+        eRangeStart = document.getElementById("eRangeStart").value;
+        eRangeEnd   = document.getElementById("eRangeEnd").value;
+
+        if (!eParsed.valid) {
+          showToast(`E 欄第 ${eParsed.errorIdx} 列時間尚未選完整（請選擇 時 與 分）`, "error");
+          return;
+        }
+        if (!eParsed.empty) {
+          if (!eRangeStart || !eRangeEnd) {
+            showToast("請在 E 欄選擇「對應原表起始」與「對應原表結束」", "error");
+            return;
+          }
+          eManualList = eParsed.items.map(it => it.timeStr);
+        }
+      }
+
+      const hasB = inputMode === "select"
+        ? Boolean(bRangeStart && bRangeEnd && bCount > 0)
+        : Boolean(bManualList && bManualList.length > 0 && bRangeStart && bRangeEnd);
+      const hasE = inputMode === "select"
+        ? Boolean(eRangeStart && eRangeEnd && eCount > 0)
+        : Boolean(eManualList && eManualList.length > 0 && eRangeStart && eRangeEnd);
 
       // 未設定加車時，直接呈現原始班表與原錨點
       if (!hasB && !hasE) {
@@ -733,24 +1456,33 @@
         return;
       }
 
-      const bStartIdx = hasB ? rawList.findIndex(r => r.b === bStart) : -1;
-      const bEndIdx = hasB ? rawList.findIndex(r => r.b === bEnd) : -1;
-      const eStartIdx = hasE ? rawList.findIndex(r => r.e === eStart) : -1;
-      const eEndIdx = hasE ? rawList.findIndex(r => r.e === eEnd) : -1;
+      const bStartIdx = hasB ? rawList.findIndex(r => r.b === bRangeStart) : -1;
+      const bEndIdx   = hasB ? rawList.findIndex(r => r.b === bRangeEnd) : -1;
+      const eStartIdx = hasE ? rawList.findIndex(r => r.e === eRangeStart) : -1;
+      const eEndIdx   = hasE ? rawList.findIndex(r => r.e === eRangeEnd) : -1;
+
+      if (hasB && (bStartIdx === -1 || bEndIdx < bStartIdx)) {
+        showToast("B 欄對應原表的結束時間不可早於起始時間", "error");
+        return;
+      }
+      if (hasE && (eStartIdx === -1 || eEndIdx < eStartIdx)) {
+        showToast("E 欄對應原表的結束時間不可早於起始時間", "error");
+        return;
+      }
 
       const validBStart = (hasB && bStartIdx !== -1) ? bStartIdx : Infinity;
       const validEStart = (hasE && eStartIdx !== -1) ? eStartIdx : Infinity;
       let segStart = Math.min(validBStart, validEStart);
-      
+
       const validBEnd = (hasB && bEndIdx !== -1) ? bEndIdx : -1;
       const validEEnd = (hasE && eEndIdx !== -1) ? eEndIdx : -1;
       let segEnd = Math.max(validBEnd, validEEnd);
 
       const bNewList = (hasB && bStartIdx !== -1 && bEndIdx >= bStartIdx)
-        ? generateSmartTripTimes(bStart, bEnd, bCount, bOrigTimes)
+        ? (inputMode === "select" ? generateSmartTripTimes(bRangeStart, bRangeEnd, bCount, bOrigTimes) : bManualList)
         : [];
       const eNewList = (hasE && eStartIdx !== -1 && eEndIdx >= eStartIdx)
-        ? generateSmartTripTimes(eStart, eEnd, eCount, eOrigTimes)
+        ? (inputMode === "select" ? generateSmartTripTimes(eRangeStart, eRangeEnd, eCount, eOrigTimes) : eManualList)
         : [];
 
       let bQueue = [];
@@ -770,7 +1502,7 @@
               isModified: k < bNewList.length
             });
           }
-          i = bEndIdx; 
+          i = bEndIdx;
         } else if (rawList[i]) {
           const r = rawList[i];
           bQueue.push({
@@ -795,7 +1527,7 @@
               isModified: k < eNewList.length
             });
           }
-          i = eEndIdx; 
+          i = eEndIdx;
         } else if (rawList[i]) {
           const r = rawList[i];
           eQueue.push({
@@ -826,7 +1558,7 @@
 
           let isBInside = isTimeInAnchor(bSec, bOrigTimes);
           let isEInside = isTimeInAnchor(eSec, eOrigTimes);
-          
+
           let thresholdSec = 630; // 都在外：10 分 30 秒
           if (isBInside && isEInside) thresholdSec = 270; // 都在內：4.5 分鐘
           else if (isBInside || isEInside) thresholdSec = 420; // 一內一外：7 分鐘
@@ -834,7 +1566,7 @@
           let diff = eSec - bSec;
           if (diff < -43200) diff += 86400;
           else if (diff > 43200) diff -= 86400;
-          
+
           if (diff >= thresholdSec) {
             mergedRows.push(createMergedRow(bItem, eItem));
             bIdx++; eIdx++;
@@ -897,7 +1629,7 @@
       if (bMax >= bMin) zones.push({ start: bMin, end: bMax });
       if (eMax >= eMin) zones.push({ start: eMin, end: eMax });
       if (zones.length === 2) {
-        zones.sort((a, b) => a.start - b.start);
+        zones.sort((a, b) => a.start - a.start);
         if (zones[1].start <= zones[0].end + 1) {
           return [{ start: zones[0].start, end: Math.max(zones[0].end, zones[1].end) }];
         }
@@ -1214,7 +1946,7 @@
     }
 
     function renderRows(rows) {
-      currentExportData = rows; 
+      currentExportData = rows;
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
 
@@ -1259,15 +1991,42 @@
       });
     }
 
+    // 模式切換
+    function setMode(mode) {
+      inputMode = mode;
+      document.getElementById("btnModeSelect").classList.toggle("active", mode === "select");
+      document.getElementById("btnModeManual").classList.toggle("active", mode === "manual");
+      document.getElementById("selectModePanel").classList.toggle("hidden", mode !== "select");
+      document.getElementById("manualModePanel").classList.toggle("hidden", mode !== "manual");
+    }
+
+    document.getElementById("btnModeSelect").addEventListener("click", () => setMode("select"));
+    document.getElementById("btnModeManual").addEventListener("click", () => setMode("manual"));
+
+    function resetManualList(col) {
+      const listEl = document.getElementById(col === "B" ? "bManualList" : "eManualList");
+      listEl.innerHTML = "";
+      addManualTimeRow(col);
+    }
+
+    document.getElementById("btnAddBTime").addEventListener("click", () => addManualTimeRow("B"));
+    document.getElementById("btnAddETime").addEventListener("click", () => addManualTimeRow("E"));
+
+    resetManualList("B");
+    resetManualList("E");
+
     document.getElementById("btnApply").addEventListener("click", updateTable);
 
     document.getElementById("btnReset").addEventListener("click", () => {
-      document.getElementById("bStart").value = "";
-      document.getElementById("bEnd").value = "";
       document.getElementById("bCount").value = "";
-      document.getElementById("eStart").value = "";
-      document.getElementById("eEnd").value = "";
       document.getElementById("eCount").value = "";
+      ["bStart", "bEnd", "eStart", "eEnd", "bRangeStart", "bRangeEnd", "eRangeStart", "eRangeEnd"].forEach(id => {
+        document.getElementById(id).value = "";
+        syncCustomSelectUI(id);
+      });
+      resetManualList("B");
+      resetManualList("E");
+
       updateTable();
     });
 
@@ -1275,7 +2034,7 @@
 
     document.getElementById("btnUpload").addEventListener("click", () => {
       if (!currentExportData || currentExportData.length === 0) {
-        alert("目前沒有資料可以上傳！");
+        showToast("目前沒有資料可以上傳！", "error");
         return;
       }
       confirmModal.style.display = "flex";
@@ -1296,18 +2055,18 @@
         const response = await fetch(UPLOAD_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          redirect: "follow", 
+          redirect: "follow",
           body: JSON.stringify({ data: currentExportData })
         });
-        
+
         const result = await response.json();
         if (result.status === "success") {
-          alert("上傳成功！已成功覆蓋更新： " + result.sheetName);
+          showToast("上傳成功！已成功覆蓋更新： " + result.sheetName, "success");
         } else {
-          alert("上傳失敗：" + result.message);
+          showToast("上傳失敗：" + result.message, "error");
         }
       } catch (error) {
-        alert("發生錯誤，請檢查網路連線或 Apps Script 權限設定。\n錯誤訊息: " + error);
+        showToast("發生錯誤，請檢查網路連線或 Apps Script 權限設定。", "error");
       } finally {
         btn.innerText = "上傳至試算表";
         btn.disabled = false;
